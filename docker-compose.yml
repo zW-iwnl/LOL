@@ -1,0 +1,47 @@
+﻿services:
+  postgres:
+    image: postgres:16
+    container_name: test_manager_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-test_manager}
+      POSTGRES_USER: ${POSTGRES_USER:-test_manager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_manager}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: test_manager_backend
+    env_file:
+      - .env
+    environment:
+      APP_ENV: development
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      target: build
+    container_name: test_manager_frontend
+    env_file:
+      - .env
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
