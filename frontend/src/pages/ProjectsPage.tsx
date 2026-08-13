@@ -11,6 +11,7 @@ import {
 } from "../api/projects";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { useActiveProject } from "../projects/ActiveProjectContext";
 
 const statusLabels: Record<ProjectStatus, string> = {
   active: "Aktivní",
@@ -62,6 +63,7 @@ function toForm(project: Project): ProjectFormState {
 }
 
 export function ProjectsPage() {
+  const { refreshProjects } = useActiveProject();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "">("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -152,6 +154,7 @@ export function ProjectsPage() {
         await createProject(payload);
       }
       closeModal();
+      refreshProjects();
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Projekt se nepodařilo uložit.");
@@ -169,6 +172,7 @@ export function ProjectsPage() {
     setPageError(null);
     try {
       await archiveProject(project.id);
+      refreshProjects();
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Projekt se nepodařilo archivovat.");

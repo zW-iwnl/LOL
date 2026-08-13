@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Defect, TestCase, TestRun, TestRunCase, User
 from app.schemas.common import TestRunStatus
-from app.schemas.test_run import TestRunAddCasesRequest, TestRunCreate, TestRunUpdate, UpdateResultRequest
+from app.schemas.test_run import TestRunAddCasesRequest, TestRunCaseUpdate, TestRunCreate, TestRunUpdate, UpdateResultRequest
+from app.services.audit import record_event
 from app.services.common import apply_updates, get_project_or_404, not_found
 
 
@@ -68,8 +69,16 @@ def create_test_run(db: Session, project_id: int, payload: TestRunCreate, curren
     test_run = TestRun(**data, project_id=project_id, created_by=current_user.id)
     db.add(test_run)
     db.flush()
+    record_event(
+        db,
+        entity_type="TestRun",
+        entity_id=test_run.id,
+        action="created",
+        actor=current_user,
+        changes=data,
+    )
     if payload.test_case_ids:
-        add_test_cases(db, test_run.id, TestRunAddCasesRequest(test_case_ids=payload.test_case_ids))
+        add_test_cases(db, test_run.id, TestRunAddCasesRequest(test_case_ids=payload.test_case_ids), current_user=current_user)
     db.commit()
     return get_test_run(db, test_run.id)
 
@@ -87,8 +96,36 @@ def delete_test_run(db: Session, test_run_id: int) -> None:
     db.commit()
 
 
-def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesRequest) -> TestRun:
+def _snapshot_test_case(test_case: TestCase) -> dict:
+    return {
+        "id": test_case.id,
+        "code": test_case.code,
+        "title": test_case.title,
+        "description": test_case.description,
+        "preconditions": test_case.preconditions,
+        "expected_summary": test_case.expected_summary,
+        "priority": test_case.priority,
+        "type": test_case.type,
+        "status": test_case.status,
+        "automated": test_case.automated,
+        "suite_id": test_case.suite_id,
+        "steps": [
+            {
+                "id": step.id,
+                "step_order": step.step_order,
+                "action": step.action,
+                "expected_result": step.expected_result,
+                "test_data": step.test_data,
+            }
+            for step in test_case.steps
+        ],
+    }
+
+
+def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesRequest, current_user: User | None = None) -> TestRun:
     test_run = get_test_run(db, test_run_id)
+    if test_run.status == "archived":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivovaný test run nelze upravovat.")
     if payload.assigned_to is not None:
         assignee = db.get(User, payload.assigned_to)
         if assignee is None or not assignee.is_active:
@@ -96,6 +133,7 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
 
     test_cases = (
         db.query(TestCase)
+        .options(selectinload(TestCase.steps))
         .filter(TestCase.project_id == test_run.project_id, TestCase.id.in_(payload.test_case_ids))
         .all()
     )
@@ -125,10 +163,60 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
             assigned_to=payload.assigned_to,
             result="not_run",
             defect_count=0,
+            test_case_version=test_case.version,
+            test_case_snapshot=_snapshot_test_case(test_case),
         )
         db.add(run_case)
+    record_event(
+        db,
+        entity_type="TestRun",
+        entity_id=test_run.id,
+        action="cases_added",
+        actor=current_user,
+        changes={"test_case_ids": payload.test_case_ids, "assigned_to": payload.assigned_to},
+    )
     db.commit()
     return get_test_run(db, test_run_id)
+
+
+def update_run_case(db: Session, test_run_case_id: int, payload: TestRunCaseUpdate) -> TestRunCase:
+    run_case = db.get(TestRunCase, test_run_case_id)
+    if run_case is None:
+        raise not_found("Test run case")
+
+    test_run = db.get(TestRun, run_case.test_run_id)
+    if test_run.status == "archived":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivovaný test run nelze upravovat.")
+
+    if payload.assigned_to is not None:
+        assignee = db.get(User, payload.assigned_to)
+        if assignee is None or not assignee.is_active:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Přiřazený tester neexistuje.")
+
+    run_case.assigned_to = payload.assigned_to
+    db.commit()
+    db.refresh(run_case)
+    return run_case
+
+
+def remove_run_case(db: Session, test_run_case_id: int) -> None:
+    run_case = db.get(TestRunCase, test_run_case_id)
+    if run_case is None:
+        raise not_found("Test run case")
+
+    test_run = db.get(TestRun, run_case.test_run_id)
+    if test_run.status == "archived":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivovaný test run nelze upravovat.")
+    if run_case.result != "not_run":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Provedený test run case nelze odebrat z runu.",
+        )
+
+    for defect in db.query(Defect).filter(Defect.test_run_case_id == run_case.id).all():
+        defect.test_run_case_id = None
+    db.delete(run_case)
+    db.commit()
 
 
 def update_result(
@@ -147,6 +235,9 @@ def update_result(
     run_case.executed_at = datetime.now(timezone.utc)
 
     test_run = db.get(TestRun, run_case.test_run_id)
+    if test_run.status == "archived":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivovaný test run nelze exekuovat.")
+
     if payload.result == "failed" and payload.defect is not None:
         defect = Defect(
             **payload.defect.model_dump(exclude={"test_run_case_id"}),

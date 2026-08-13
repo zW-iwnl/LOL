@@ -40,6 +40,28 @@ def _path_for(payload: TestSuiteCreate | TestSuiteUpdate, parent: TestSuite | No
     return f"{prefix}/{name}".replace("//", "/")
 
 
+def _is_descendant(db: Session, suite: TestSuite, parent_id: int) -> bool:
+    current = db.get(TestSuite, parent_id)
+    while current is not None:
+        if current.id == suite.id:
+            return True
+        current = db.get(TestSuite, current.parent_suite_id) if current.parent_suite_id else None
+    return False
+
+
+def _update_descendant_paths(db: Session, suite: TestSuite) -> None:
+    children = (
+        db.query(TestSuite)
+        .filter(TestSuite.parent_suite_id == suite.id)
+        .order_by(TestSuite.sort_order, TestSuite.name)
+        .all()
+    )
+    for child in children:
+        child.path = f"{suite.path}/{child.name}".replace("//", "/")
+        child.level = suite.level + 1
+        _update_descendant_paths(db, child)
+
+
 def create_suite(db: Session, project_id: int, payload: TestSuiteCreate, current_user: User) -> TestSuite:
     get_project_or_404(db, project_id)
     parent = _validate_parent(db, project_id, payload.parent_suite_id)
@@ -58,11 +80,14 @@ def update_suite(db: Session, suite_id: int, payload: TestSuiteUpdate) -> TestSu
     parent_id = payload.parent_suite_id if payload.parent_suite_id is not None else suite.parent_suite_id
     if parent_id == suite.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Suite nemůže být vlastním rodičem.")
+    if parent_id is not None and _is_descendant(db, suite, parent_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Suite nelze přesunout pod vlastní podstrom.")
     parent = _validate_parent(db, suite.project_id, parent_id)
     apply_updates(suite, payload)
     suite.path = _path_for(payload, parent, suite)
     if payload.parent_suite_id is not None:
         suite.level = parent.level + 1 if parent else 0
+    _update_descendant_paths(db, suite)
     db.commit()
     db.refresh(suite)
     return suite
@@ -70,6 +95,11 @@ def update_suite(db: Session, suite_id: int, payload: TestSuiteUpdate) -> TestSu
 
 def delete_suite(db: Session, suite_id: int) -> None:
     suite = get_suite(db, suite_id)
+    child_count = db.query(TestSuite).filter(TestSuite.parent_suite_id == suite.id).count()
+    if child_count:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nelze smazat suitu, která obsahuje podsuity.")
+    if suite.test_cases:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nelze smazat suitu, která obsahuje test cases.")
     db.delete(suite)
     db.commit()
 

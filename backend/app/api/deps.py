@@ -25,14 +25,7 @@ def get_current_user(db: DbSession, credentials: BearerToken = None) -> User:
                 return user
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Neplatný nebo expirovaný token.")
 
-    # Development fallback until full JWT auth and password verification are wired into the frontend.
-    user = db.query(User).filter(User.is_active.is_(True)).order_by(User.id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nejprve založ uživatele nebo spusť seed data.",
-        )
-    return user
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Přihlášení je vyžadováno.")
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

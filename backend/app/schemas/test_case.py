@@ -59,5 +59,6 @@ class TestCaseUpdate(BaseModel):
 class TestCaseRead(TestCaseBase, TimestampFields):
     id: int
     project_id: int
+    version: int
     created_by: int
     steps: list[TestStepRead] = []

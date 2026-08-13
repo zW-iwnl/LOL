@@ -45,6 +45,8 @@ class TestRunCaseRead(TimestampFields):
     executed_by: int | None
     executed_at: datetime | None
     defect_count: int
+    test_case_version: int
+    test_case_snapshot: dict | None
 
 
 class TestRunCaseExecutionRead(TestRunCaseRead):
@@ -72,6 +74,10 @@ class TestRunAddCasesRequest(BaseModel):
 
 
 AddTestCasesRequest = TestRunAddCasesRequest
+
+
+class TestRunCaseUpdate(BaseModel):
+    assigned_to: int | None = None
 
 
 class UpdateResultRequest(BaseModel):

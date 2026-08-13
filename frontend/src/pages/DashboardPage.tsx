@@ -1,4 +1,5 @@
 import { Activity, Bug, CheckCircle2, ClipboardCheck, PlayCircle, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 import { getDashboard, type TestRunCaseResult } from "../api/client";
 import { ErrorState, LoadingState, useApiResource, useCurrentProject } from "../api/hooks";
 import { resultLabel } from "../data/mockData";
@@ -54,9 +55,12 @@ export function DashboardPage() {
         <div className="rounded-md border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <h2 className="text-base font-semibold">Poslední test runy</h2>
-            <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+            <a
+              className="relative z-20 inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              href="/test-runs?new=1"
+            >
               <Plus size={16} /> Nový run
-            </button>
+            </a>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -105,10 +109,15 @@ export function DashboardPage() {
           <div className="rounded-md border border-slate-200 bg-white p-5">
             <h2 className="text-base font-semibold">Rychlé akce</h2>
             <div className="mt-4 grid gap-2">
-              {["Nový test case", "Založit test run", "Nahlásit defect", "Otevřít execution"].map((action) => (
-                <button key={action} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50">
-                  <Activity size={16} className="text-cyan-700" /> {action}
-                </button>
+              {[
+                { label: "Nový test case", to: "/test-cases?new=1" },
+                { label: "Založit test run", to: "/test-runs?new=1" },
+                { label: "Nahlásit defect", to: "/defects?new=1" },
+                { label: "Otevřít execution", to: "/test-runs" },
+              ].map((action) => (
+                <Link key={action.label} to={action.to} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50">
+                  <Activity size={16} className="text-cyan-700" /> {action.label}
+                </Link>
               ))}
             </div>
           </div>

@@ -13,7 +13,7 @@ if [ "$SEED_DEMO_DATA" = "true" ]; then
 fi
 
 if [ "$APP_ENV" = "production" ]; then
-  exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers "${UVICORN_WORKERS:-2}"
+  exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers "${UVICORN_WORKERS:-2}"
 fi
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --reload

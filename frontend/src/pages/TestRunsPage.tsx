@@ -1,13 +1,14 @@
-import { Archive, Eye, Pencil, PlayCircle, Plus, Search, X } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { getProjects } from "../api/projects";
+import { Archive, Eye, Pencil, PlayCircle, Plus, Search, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getTestCases } from "../api/testCases";
 import {
   addCasesToTestRun,
   archiveTestRun,
   createTestRun,
   getTestRuns,
+  removeTestRunCase,
+  updateTestRunCase,
   updateTestRun,
   type TestRun,
   type TestRunCase,
@@ -18,6 +19,7 @@ import { getUsers, type TestCase } from "../api/client";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { resultLabel } from "../data/mockData";
+import { useActiveProject } from "../projects/ActiveProjectContext";
 
 const statusLabels: Record<TestRunStatus, string> = {
   open: "Otevřený",
@@ -34,6 +36,7 @@ const statusClasses: Record<TestRunStatus, string> = {
 };
 
 type ModalMode = "create" | "edit" | "detail";
+type CreateStep = "details" | "cases" | "assignment";
 
 type TestRunFormState = {
   name: string;
@@ -123,13 +126,93 @@ function buildPayload(form: TestRunFormState): TestRunCreatePayload {
   };
 }
 
+type CasePickerFiltersProps = {
+  query: string;
+  priority: string;
+  status: string;
+  onQueryChange: (value: string) => void;
+  onPriorityChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+};
+
+function CasePickerFilters({ query, priority, status, onQueryChange, onPriorityChange, onStatusChange }: CasePickerFiltersProps) {
+  return (
+    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_150px_150px]">
+      <label className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <input
+          className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm"
+          placeholder="Hledat podle kódu nebo názvu"
+          type="search"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+        />
+      </label>
+      <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={priority} onChange={(event) => onPriorityChange(event.target.value)}>
+        <option value="">Všechny priority</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={status} onChange={(event) => onStatusChange(event.target.value)}>
+        <option value="">Všechny statusy</option>
+        <option value="ready">Ready</option>
+        <option value="draft">Draft</option>
+        <option value="deprecated">Deprecated</option>
+      </select>
+    </div>
+  );
+}
+
+type CasePickerListProps = {
+  testCases: TestCase[];
+  selectedCaseIds: number[];
+  onToggle: (testCaseId: number) => void;
+  emptyText?: string;
+};
+
+function CasePickerList({ testCases, selectedCaseIds, onToggle, emptyText = "Nejsou dostupné žádné test cases." }: CasePickerListProps) {
+  return (
+    <div className="max-h-56 overflow-auto rounded-md border border-slate-200">
+      {testCases.map((testCase) => (
+        <label key={testCase.id} className="flex items-start gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0">
+          <input
+            className="mt-1"
+            checked={selectedCaseIds.includes(testCase.id)}
+            onChange={() => onToggle(testCase.id)}
+            type="checkbox"
+          />
+          <span>
+            <span className="font-medium">{testCase.code} - {testCase.title}</span>
+            <span className="mt-1 block text-xs text-slate-500">{testCase.priority} / {testCase.status}</span>
+          </span>
+        </label>
+      ))}
+      {testCases.length === 0 && <div className="px-4 py-6 text-sm text-slate-500">{emptyText}</div>}
+    </div>
+  );
+}
+
 export function TestRunsPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const shouldOpenCreate = searchParams.get("new") === "1" || (location.state as { openCreateRun?: boolean } | null)?.openCreateRun === true;
+  const {
+    projects,
+    activeProjectId,
+    activeProject,
+    setActiveProjectId,
+    loading: projectsLoading,
+    error: projectsError,
+  } = useActiveProject();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TestRunStatus | "">("");
   const [environmentFilter, setEnvironmentFilter] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalMode, setModalMode] = useState<ModalMode | null>(null);
+  const [createStep, setCreateStep] = useState<CreateStep>("details");
   const [selectedRun, setSelectedRun] = useState<TestRun | null>(null);
   const [form, setForm] = useState<TestRunFormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -137,9 +220,10 @@ export function TestRunsPage() {
   const [saving, setSaving] = useState(false);
   const [selectedCaseIds, setSelectedCaseIds] = useState<number[]>([]);
   const [assignedTo, setAssignedTo] = useState("");
+  const [caseQuery, setCaseQuery] = useState("");
+  const [casePriorityFilter, setCasePriorityFilter] = useState("");
+  const [caseStatusFilter, setCaseStatusFilter] = useState("");
 
-  const projectsState = useApiResource(() => getProjects({ limit: 100, offset: 0 }), []);
-  const activeProjectId = selectedProjectId ?? projectsState.data?.[0]?.id ?? null;
   const runsState = useApiResource(
     () =>
       activeProjectId
@@ -154,13 +238,12 @@ export function TestRunsPage() {
   const casesState = useApiResource(() => (activeProjectId ? getTestCases(activeProjectId) : Promise.resolve([])), [activeProjectId, refreshKey]);
   const usersState = useApiResource(getUsers, [refreshKey]);
 
-  const projects = projectsState.data ?? [];
   const runs = runsState.data ?? [];
   const allRuns = allRunsState.data ?? [];
   const testCases = casesState.data ?? [];
   const users = usersState.data ?? [];
 
-  const selectedProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const selectedProject = activeProject;
   const selectedRunLatest = useMemo(
     () => (selectedRun ? runs.find((run) => run.id === selectedRun.id) ?? selectedRun : null),
     [runs, selectedRun],
@@ -178,13 +261,33 @@ export function TestRunsPage() {
 
   const assignedCaseIds = new Set((selectedRunLatest?.test_run_cases ?? []).map((runCase) => runCase.test_case_id));
   const availableTestCases = testCases.filter((testCase) => !assignedCaseIds.has(testCase.id));
+  const filteredAvailableTestCases = availableTestCases.filter((testCase) => {
+    const normalizedQuery = caseQuery.trim().toLowerCase();
+    const matchesQuery = !normalizedQuery || `${testCase.code} ${testCase.title}`.toLowerCase().includes(normalizedQuery);
+    const matchesPriority = !casePriorityFilter || testCase.priority === casePriorityFilter;
+    const matchesStatus = !caseStatusFilter || testCase.status === caseStatusFilter;
+    return matchesQuery && matchesPriority && matchesStatus;
+  });
+  const filteredAvailableIds = filteredAvailableTestCases.map((testCase) => testCase.id);
+  const allFilteredSelected = filteredAvailableIds.length > 0 && filteredAvailableIds.every((id) => selectedCaseIds.includes(id));
+
+  useEffect(() => {
+    if (shouldOpenCreate && !modalMode) {
+      openCreate();
+      navigate("/test-runs", { replace: true });
+    }
+  }, [modalMode, navigate, shouldOpenCreate]);
 
   function openCreate() {
     setSelectedRun(null);
     setForm(emptyForm);
     setFormError(null);
+    setCreateStep("details");
     setSelectedCaseIds([]);
     setAssignedTo("");
+    setCaseQuery("");
+    setCasePriorityFilter("");
+    setCaseStatusFilter("");
     setModalMode("create");
   }
 
@@ -201,6 +304,9 @@ export function TestRunsPage() {
     setFormError(null);
     setSelectedCaseIds([]);
     setAssignedTo("");
+    setCaseQuery("");
+    setCasePriorityFilter("");
+    setCaseStatusFilter("");
     setModalMode("detail");
   }
 
@@ -208,8 +314,12 @@ export function TestRunsPage() {
     setModalMode(null);
     setSelectedRun(null);
     setFormError(null);
+    setCreateStep("details");
     setSelectedCaseIds([]);
     setAssignedTo("");
+    setCaseQuery("");
+    setCasePriorityFilter("");
+    setCaseStatusFilter("");
   }
 
   function validateForm() {
@@ -220,6 +330,37 @@ export function TestRunsPage() {
       return "Plánovaný začátek musí být před plánovaným koncem.";
     }
     return null;
+  }
+
+  function goToNextCreateStep() {
+    setFormError(null);
+    if (createStep === "details") {
+      const validationError = validateForm();
+      if (validationError) {
+        setFormError(validationError);
+        return;
+      }
+      setCreateStep("cases");
+      return;
+    }
+    if (createStep === "cases") {
+      if (selectedCaseIds.length === 0) {
+        setFormError("Vyber alespoň jeden test case pro test run.");
+        return;
+      }
+      setCreateStep("assignment");
+    }
+  }
+
+  function goToPreviousCreateStep() {
+    setFormError(null);
+    if (createStep === "assignment") {
+      setCreateStep("cases");
+      return;
+    }
+    if (createStep === "cases") {
+      setCreateStep("details");
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -233,15 +374,27 @@ export function TestRunsPage() {
       setFormError(validationError);
       return;
     }
+    if (modalMode === "create" && selectedCaseIds.length === 0) {
+      setCreateStep("cases");
+      setFormError("Vyber alespoň jeden test case pro test run.");
+      return;
+    }
 
     setSaving(true);
     setFormError(null);
     setPageError(null);
     try {
       const payload = buildPayload(form);
-      const savedRun = modalMode === "edit" && selectedRun ? await updateTestRun(selectedRun.id, payload) : await createTestRun(activeProjectId, payload);
+      let savedRun = modalMode === "edit" && selectedRun ? await updateTestRun(selectedRun.id, payload) : await createTestRun(activeProjectId, payload);
+      if (modalMode === "create" && selectedCaseIds.length > 0) {
+        savedRun = await addCasesToTestRun(savedRun.id, {
+          test_case_ids: selectedCaseIds,
+          assigned_to: assignedTo ? Number(assignedTo) : null,
+        });
+      }
       setSelectedRun(savedRun);
       setModalMode("detail");
+      setSelectedCaseIds([]);
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Test run se nepodařilo uložit.");
@@ -275,6 +428,45 @@ export function TestRunsPage() {
     }
   }
 
+  function toggleAllFilteredCases() {
+    if (allFilteredSelected) {
+      setSelectedCaseIds((current) => current.filter((id) => !filteredAvailableIds.includes(id)));
+      return;
+    }
+    setSelectedCaseIds((current) => Array.from(new Set([...current, ...filteredAvailableIds])));
+  }
+
+  async function handleAssignRunCase(runCase: TestRunCase, value: string) {
+    setSaving(true);
+    setFormError(null);
+    try {
+      await updateTestRunCase(runCase.id, { assigned_to: value ? Number(value) : null });
+      setRefreshKey((current) => current + 1);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Přiřazení testera se nepodařilo uložit.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemoveRunCase(runCase: TestRunCase) {
+    const testCase = testCases.find((item) => item.id === runCase.test_case_id);
+    const confirmed = window.confirm(`Odebrat ${testCase?.code ?? "test case"} z test runu?`);
+    if (!confirmed) {
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      await removeTestRunCase(runCase.id);
+      setRefreshKey((current) => current + 1);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Test case se nepodařilo odebrat z runu.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleArchive(run: TestRun) {
     const confirmed = window.confirm(`Archivovat test run ${run.name}?`);
     if (!confirmed) {
@@ -293,31 +485,37 @@ export function TestRunsPage() {
     }
   }
 
-  if (projectsState.loading || runsState.loading || allRunsState.loading || casesState.loading || usersState.loading) {
+  if (projectsLoading || runsState.loading || allRunsState.loading || casesState.loading || usersState.loading) {
     return <LoadingState />;
   }
 
-  if (projectsState.error || runsState.error || allRunsState.error || casesState.error || usersState.error) {
-    return <ErrorState message={projectsState.error ?? runsState.error ?? allRunsState.error ?? casesState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
+  if (projectsError || runsState.error || allRunsState.error || casesState.error || usersState.error) {
+    return <ErrorState message={projectsError ?? runsState.error ?? allRunsState.error ?? casesState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <PageHeader title="Test Runs" description="Plánování, správa a sledování běhů testování." />
-        <div className="flex flex-wrap gap-2">
-          <select
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={activeProjectId ?? ""}
-            onChange={(event) => {
-              setSelectedProjectId(Number(event.target.value));
-              closeModal();
-            }}
-          >
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-64 text-sm">
+            <span className="font-medium">Projekt</span>
+            <select
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={activeProjectId ?? ""}
+              onChange={(event) => {
+                setActiveProjectId(event.target.value ? Number(event.target.value) : null);
+                closeModal();
+              }}
+            >
+              {projects.length === 0 ? <option value="">Žádný projekt</option> : null}
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.code} - {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} type="button">
             <Plus size={16} /> Nový test run
           </button>
@@ -470,7 +668,30 @@ export function TestRunsPage() {
             </div>
 
             {modalMode !== "detail" ? (
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="mt-5 space-y-5">
+                {modalMode === "create" ? (
+                  <div className="grid gap-2 rounded-md bg-slate-50 p-2 text-sm md:grid-cols-3">
+                    {[
+                      ["details", "1. Nastavení"],
+                      ["cases", "2. Test cases"],
+                      ["assignment", "3. Přiřazení"],
+                    ].map(([step, label]) => (
+                      <button
+                        key={step}
+                        className={[
+                          "rounded-md px-3 py-2 text-left font-medium",
+                          createStep === step ? "bg-white text-cyan-700 shadow-sm" : "text-slate-600 hover:bg-white",
+                        ].join(" ")}
+                        type="button"
+                        onClick={() => setCreateStep(step as CreateStep)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className={`grid gap-4 md:grid-cols-2 ${modalMode === "create" && createStep !== "details" ? "hidden" : ""}`}>
                 <label className="block text-sm md:col-span-2">
                   <span className="font-medium">Název test runu</span>
                   <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
@@ -510,6 +731,58 @@ export function TestRunsPage() {
                   <span className="font-medium">Plánovaný konec</span>
                   <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="datetime-local" value={form.planned_end} onChange={(event) => setForm((current) => ({ ...current, planned_end: event.target.value }))} />
                 </label>
+                </div>
+                {modalMode === "create" && (
+                  <section className={`rounded-md border border-slate-200 p-4 ${createStep !== "cases" ? "hidden" : ""}`}>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="font-semibold">Test cases v runu</div>
+                        <div className="mt-1 text-sm text-slate-500">Vybráno {selectedCaseIds.length} z {availableTestCases.length} dostupných.</div>
+                      </div>
+                      <button className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={filteredAvailableIds.length === 0} onClick={toggleAllFilteredCases} type="button">
+                        {allFilteredSelected ? "Odznačit zobrazené" : "Vybrat zobrazené"}
+                      </button>
+                    </div>
+                    <CasePickerFilters
+                      query={caseQuery}
+                      priority={casePriorityFilter}
+                      status={caseStatusFilter}
+                      onQueryChange={setCaseQuery}
+                      onPriorityChange={setCasePriorityFilter}
+                      onStatusChange={setCaseStatusFilter}
+                    />
+                    <CasePickerList
+                      testCases={filteredAvailableTestCases}
+                      selectedCaseIds={selectedCaseIds}
+                      onToggle={(testCaseId) =>
+                        setSelectedCaseIds((current) =>
+                          current.includes(testCaseId) ? current.filter((id) => id !== testCaseId) : [...current, testCaseId],
+                        )
+                      }
+                    />
+                  </section>
+                )}
+                {modalMode === "create" && (
+                  <section className={`rounded-md border border-slate-200 p-4 ${createStep !== "assignment" ? "hidden" : ""}`}>
+                    <div className="font-semibold">Přiřazení testerovi</div>
+                    <p className="mt-1 text-sm text-slate-500">Vybrané test cases: {selectedCaseIds.length}. Přiřazení můžeš později změnit v detailu runu.</p>
+                    <label className="mt-4 block text-sm">
+                      <span className="font-medium">Tester</span>
+                      <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
+                        <option value="">Nepřiřazeno</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>{user.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="mt-4 grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-2">
+                      <div><span className="text-slate-500">Název:</span> {form.name || "-"}</div>
+                      <div><span className="text-slate-500">Prostředí:</span> {form.environment || "-"}</div>
+                      <div><span className="text-slate-500">Verze:</span> {form.version || "-"}</div>
+                      <div><span className="text-slate-500">Počet test cases:</span> {selectedCaseIds.length}</div>
+                    </div>
+                  </section>
+                )}
               </div>
             ) : selectedRunLatest ? (
               <div className="mt-5 space-y-5">
@@ -533,12 +806,29 @@ export function TestRunsPage() {
                   <div className="max-h-60 overflow-auto">
                     {selectedRunLatest.test_run_cases.map((runCase) => {
                       const testCase = testCases.find((item) => item.id === runCase.test_case_id);
-                      const assignee = users.find((user) => user.id === runCase.assigned_to);
                       return (
-                        <div key={runCase.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_160px_120px]">
+                        <div key={runCase.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_180px_120px_96px]">
                           <div className="font-medium">{testCase ? `${testCase.code} - ${testCase.title}` : runCase.test_case_id}</div>
-                          <div className="text-slate-500">{assignee?.name ?? "-"}</div>
+                          <select
+                            className="rounded-md border border-slate-200 px-2 py-1 text-sm"
+                            disabled={saving || selectedRunLatest.status === "archived"}
+                            value={runCase.assigned_to ?? ""}
+                            onChange={(event) => void handleAssignRunCase(runCase, event.target.value)}
+                          >
+                            <option value="">Nepřiřazeno</option>
+                            {users.map((user) => (
+                              <option key={user.id} value={user.id}>{user.name}</option>
+                            ))}
+                          </select>
                           <div>{resultLabel(runCase.result)}</div>
+                          <button
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={saving || selectedRunLatest.status === "archived" || runCase.result !== "not_run"}
+                            onClick={() => void handleRemoveRunCase(runCase)}
+                            type="button"
+                          >
+                            <Trash2 size={14} /> Odebrat
+                          </button>
                         </div>
                       );
                     })}
@@ -548,29 +838,29 @@ export function TestRunsPage() {
 
                 <section className="rounded-md border border-slate-200 p-4">
                   <div className="font-semibold">Přidat test cases</div>
+                  <CasePickerFilters
+                    query={caseQuery}
+                    priority={casePriorityFilter}
+                    status={caseStatusFilter}
+                    onQueryChange={setCaseQuery}
+                    onPriorityChange={setCasePriorityFilter}
+                    onStatusChange={setCaseStatusFilter}
+                  />
                   <div className="mt-3 grid gap-3 md:grid-cols-[1fr_220px]">
-                    <div className="max-h-56 overflow-auto rounded-md border border-slate-200">
-                      {availableTestCases.map((testCase: TestCase) => (
-                        <label key={testCase.id} className="flex items-start gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0">
-                          <input
-                            className="mt-1"
-                            checked={selectedCaseIds.includes(testCase.id)}
-                            onChange={() =>
-                              setSelectedCaseIds((current) =>
-                                current.includes(testCase.id) ? current.filter((id) => id !== testCase.id) : [...current, testCase.id],
-                              )
-                            }
-                            type="checkbox"
-                          />
-                          <span>
-                            <span className="font-medium">{testCase.code} - {testCase.title}</span>
-                            <span className="mt-1 block text-xs text-slate-500">{testCase.priority} / {testCase.status}</span>
-                          </span>
-                        </label>
-                      ))}
-                      {availableTestCases.length === 0 && <div className="px-4 py-6 text-sm text-slate-500">Všechny dostupné test cases už jsou v runu.</div>}
-                    </div>
+                    <CasePickerList
+                      emptyText={availableTestCases.length === 0 ? "Všechny dostupné test cases už jsou v runu." : "Filtru neodpovídá žádný test case."}
+                      testCases={filteredAvailableTestCases}
+                      selectedCaseIds={selectedCaseIds}
+                      onToggle={(testCaseId) =>
+                        setSelectedCaseIds((current) =>
+                          current.includes(testCaseId) ? current.filter((id) => id !== testCaseId) : [...current, testCaseId],
+                        )
+                      }
+                    />
                     <div>
+                      <button className="mb-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={filteredAvailableIds.length === 0} onClick={toggleAllFilteredCases} type="button">
+                        {allFilteredSelected ? "Odznačit zobrazené" : "Vybrat zobrazené"}
+                      </button>
                       <label className="block text-sm">
                         <span className="font-medium">Tester</span>
                         <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
@@ -592,14 +882,18 @@ export function TestRunsPage() {
             {formError && <div className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{formError}</div>}
 
             <div className="mt-5 flex justify-end gap-2">
-              <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium" onClick={closeModal} type="button">
-                Zavřít
+              <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium" onClick={modalMode === "create" && createStep !== "details" ? goToPreviousCreateStep : closeModal} type="button">
+                {modalMode === "create" && createStep !== "details" ? "Zpět" : "Zavřít"}
               </button>
-              {modalMode !== "detail" && (
-                <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={saving} type="submit">
-                  {saving ? "Ukládám..." : "Uložit"}
+              {modalMode === "create" && createStep !== "assignment" ? (
+                <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={goToNextCreateStep} type="button">
+                  Pokračovat
                 </button>
-              )}
+              ) : modalMode !== "detail" ? (
+                <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={saving} type="submit">
+                  {saving ? "Ukládám..." : modalMode === "create" ? "Vytvořit test run" : "Uložit"}
+                </button>
+              ) : null}
             </div>
           </form>
         </div>

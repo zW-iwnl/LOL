@@ -5,6 +5,7 @@ from app.schemas.common import TestRunStatus
 from app.schemas.test_run import (
     TestRunAddCasesRequest,
     TestRunCaseRead,
+    TestRunCaseUpdate,
     TestRunCreate,
     TestRunExecutionRead,
     TestRunListItem,
@@ -60,8 +61,19 @@ def delete_test_run(test_run_id: int, db: DbSession) -> Response:
 
 
 @router.post("/test-runs/{test_run_id}/cases", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
-def add_test_cases(test_run_id: int, payload: TestRunAddCasesRequest, db: DbSession):
-    return test_run_service.add_test_cases(db, test_run_id, payload)
+def add_test_cases(test_run_id: int, payload: TestRunAddCasesRequest, db: DbSession, current_user: CurrentUser):
+    return test_run_service.add_test_cases(db, test_run_id, payload, current_user=current_user)
+
+
+@router.put("/test-run-cases/{test_run_case_id}", response_model=TestRunCaseRead)
+def update_run_case(test_run_case_id: int, payload: TestRunCaseUpdate, db: DbSession):
+    return test_run_service.update_run_case(db, test_run_case_id, payload)
+
+
+@router.delete("/test-run-cases/{test_run_case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_run_case(test_run_case_id: int, db: DbSession) -> Response:
+    test_run_service.remove_run_case(db, test_run_case_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/test-runs/{test_run_id}/execution", response_model=TestRunExecutionRead)

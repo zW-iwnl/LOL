@@ -23,8 +23,8 @@ def get_defect(defect_id: int, db: DbSession):
 
 
 @router.put("/defects/{defect_id}", response_model=DefectRead)
-def update_defect(defect_id: int, payload: DefectUpdate, db: DbSession):
-    return defect_service.update_defect(db, defect_id, payload)
+def update_defect(defect_id: int, payload: DefectUpdate, db: DbSession, current_user: CurrentUser):
+    return defect_service.update_defect(db, defect_id, payload, current_user)
 
 
 @router.delete("/defects/{defect_id}", status_code=status.HTTP_204_NO_CONTENT)

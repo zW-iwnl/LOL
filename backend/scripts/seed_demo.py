@@ -1,22 +1,26 @@
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import hash_password
 from app.models import Project, TestCase, TestRun, TestRunCase, TestStep, TestSuite, User
 
 
-ADMIN_EMAIL = "admin@test-manager.local"
+ADMIN_EMAIL = "admin@testmanager.cz"
+ADMIN_PASSWORD = "admin123"
 PROJECT_CODE = "ESHOP"
 
 
 def get_or_create_admin(db: Session) -> User:
     user = db.query(User).filter(User.email == ADMIN_EMAIL).one_or_none()
     if user:
+        if user.password_hash == "$2b$12$demo.hash.replace.before.production":
+            user.password_hash = hash_password(ADMIN_PASSWORD)
         return user
 
     user = User(
         name="Admin Tester",
         email=ADMIN_EMAIL,
-        password_hash="$2b$12$demo.hash.replace.before.production",
+        password_hash=hash_password(ADMIN_PASSWORD),
         role="admin",
         is_active=True,
     )

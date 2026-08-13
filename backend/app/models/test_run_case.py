@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -20,6 +20,8 @@ class TestRunCase(TimestampMixin, Base):
     executed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     defect_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    test_case_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    test_case_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     test_run = relationship("TestRun", back_populates="test_run_cases")
     test_case = relationship("TestCase", back_populates="test_run_cases")

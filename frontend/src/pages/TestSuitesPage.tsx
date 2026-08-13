@@ -1,12 +1,14 @@
-import { ChevronDown, ChevronRight, Plus, RefreshCw, Save, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, RefreshCw, Save, Search, Trash2, Unlink } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createTestSuite,
+  deleteTestSuite,
   getTestSuiteChildren,
   getTestSuites,
   getTestSuiteTestCases,
   searchTestSuites,
+  updateTestCase,
   updateTestSuite,
   type TestCase,
   type TestSuite,
@@ -17,6 +19,7 @@ import { PageHeader } from "../components/PageHeader";
 type SuiteForm = {
   name: string;
   description: string;
+  placement: "root" | "child";
   parentSuiteId: string;
   sortOrder: string;
   isActive: boolean;
@@ -25,6 +28,7 @@ type SuiteForm = {
 const emptyForm: SuiteForm = {
   name: "",
   description: "",
+  placement: "root",
   parentSuiteId: "",
   sortOrder: "0",
   isActive: true,
@@ -38,6 +42,7 @@ function formFromSuite(suite: TestSuite | null): SuiteForm {
   return {
     name: suite.name,
     description: suite.description ?? "",
+    placement: suite.parent_suite_id ? "child" : "root",
     parentSuiteId: suite.parent_suite_id?.toString() ?? "",
     sortOrder: suite.sort_order.toString(),
     isActive: suite.is_active,
@@ -47,6 +52,7 @@ function formFromSuite(suite: TestSuite | null): SuiteForm {
 export function TestSuitesPage() {
   const { project, loading: projectLoading, error: projectError } = useCurrentProject();
   const [rootSuites, setRootSuites] = useState<TestSuite[]>([]);
+  const [allSuites, setAllSuites] = useState<TestSuite[]>([]);
   const [childrenBySuite, setChildrenBySuite] = useState<Record<number, TestSuite[]>>({});
   const [expandedSuiteIds, setExpandedSuiteIds] = useState<Set<number>>(new Set());
   const [selectedSuite, setSelectedSuite] = useState<TestSuite | null>(null);
@@ -60,11 +66,12 @@ export function TestSuitesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const allLoadedSuites = useMemo(() => {
-    const children = Object.values(childrenBySuite).flat();
-    const byId = new Map([...rootSuites, ...children, ...(searchResults ?? [])].map((suite) => [suite.id, suite]));
-    return Array.from(byId.values()).sort((a, b) => a.path.localeCompare(b.path));
-  }, [childrenBySuite, rootSuites, searchResults]);
+  const editParentOptions = useMemo(() => {
+    if (!selectedSuite) {
+      return allSuites;
+    }
+    return allSuites.filter((suite) => suite.id !== selectedSuite.id && !suite.path.startsWith(`${selectedSuite.path}/`));
+  }, [allSuites, selectedSuite]);
 
   useEffect(() => {
     if (!project) {
@@ -76,6 +83,7 @@ export function TestSuitesPage() {
     getTestSuites(project.id)
       .then((suites) => {
         const roots = suites.filter((suite) => suite.parent_suite_id === null);
+        setAllSuites(suites);
         setRootSuites(roots);
         setChildrenBySuite({});
         setExpandedSuiteIds(new Set());
@@ -152,6 +160,7 @@ export function TestSuitesPage() {
     }
     setLoading(true);
     const suites = await getTestSuites(project.id);
+    setAllSuites(suites);
     setRootSuites(suites.filter((suite) => suite.parent_suite_id === null));
     setLoading(false);
   }
@@ -168,7 +177,7 @@ export function TestSuitesPage() {
       const created = await createTestSuite(project.id, {
         name: createForm.name.trim(),
         description: createForm.description.trim() || null,
-        parent_suite_id: createForm.parentSuiteId ? Number(createForm.parentSuiteId) : null,
+        parent_suite_id: createForm.placement === "child" && createForm.parentSuiteId ? Number(createForm.parentSuiteId) : null,
         sort_order: Number(createForm.sortOrder) || 0,
         is_active: createForm.isActive,
       });
@@ -196,7 +205,7 @@ export function TestSuitesPage() {
       const updated = await updateTestSuite(selectedSuite.id, {
         name: editForm.name.trim(),
         description: editForm.description.trim() || null,
-        parent_suite_id: editForm.parentSuiteId ? Number(editForm.parentSuiteId) : null,
+        parent_suite_id: editForm.placement === "child" && editForm.parentSuiteId ? Number(editForm.parentSuiteId) : null,
         sort_order: Number(editForm.sortOrder) || 0,
         is_active: editForm.isActive,
       });
@@ -208,6 +217,49 @@ export function TestSuitesPage() {
       setSelectedSuite(updated);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Test suite se nepodařilo upravit.");
+    }
+  }
+
+  async function handleDeleteSelectedSuite() {
+    if (!selectedSuite) {
+      return;
+    }
+    const confirmed = window.confirm(`Smazat test suite "${selectedSuite.name}"? Mazání je povolené jen pro prázdné suity bez podsuity a test cases.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    try {
+      await deleteTestSuite(selectedSuite.id);
+      setMessage("Test suite byla smazána.");
+      setSelectedSuite(null);
+      setTestCases([]);
+      await refreshRoots();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Test suite se nepodařilo smazat.");
+    }
+  }
+
+  async function handleRemoveTestCaseFromSuite(testCase: TestCase) {
+    if (!selectedSuite) {
+      return;
+    }
+    const confirmed = window.confirm(`Odebrat test case ${testCase.code} ze suity "${selectedSuite.name}"? Test case zůstane v projektu bez suity.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    try {
+      await updateTestCase(testCase.id, { suite_id: null });
+      setMessage("Test case byl odebrán ze suity.");
+      const updatedCases = await getTestSuiteTestCases(selectedSuite.id);
+      setTestCases(updatedCases);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Test case se nepodařilo odebrat ze suity.");
     }
   }
 
@@ -326,6 +378,7 @@ export function TestSuitesPage() {
                       <th className="px-5 py-3 font-medium">Název</th>
                       <th className="px-5 py-3 font-medium">Priorita</th>
                       <th className="px-5 py-3 font-medium">Stav</th>
+                      <th className="px-5 py-3 font-medium">Akce</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -337,6 +390,15 @@ export function TestSuitesPage() {
                         <td className="px-5 py-3">{testCase.title}</td>
                         <td className="px-5 py-3">{testCase.priority}</td>
                         <td className="px-5 py-3">{testCase.status}</td>
+                        <td className="px-5 py-3">
+                          <button
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+                            type="button"
+                            onClick={() => void handleRemoveTestCaseFromSuite(testCase)}
+                          >
+                            <Unlink size={14} /> Odebrat ze suity
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -350,12 +412,20 @@ export function TestSuitesPage() {
         <aside className="space-y-6">
           <form className="rounded-md border border-slate-200 bg-white p-5" onSubmit={(event) => void handleCreate(event)}>
             <h2 className="flex items-center gap-2 font-semibold"><Plus size={18} /> Nová test suite</h2>
-            <SuiteFormFields form={createForm} allSuites={allLoadedSuites} onChange={setCreateForm} submitLabel="Vytvořit suitu" />
+            <SuiteFormFields form={createForm} allSuites={allSuites} onChange={setCreateForm} submitLabel="Vytvořit suitu" />
           </form>
 
           <form className="rounded-md border border-slate-200 bg-white p-5" onSubmit={(event) => void handleUpdate(event)}>
             <h2 className="flex items-center gap-2 font-semibold"><Save size={18} /> Editace test suite</h2>
-            <SuiteFormFields form={editForm} allSuites={allLoadedSuites.filter((suite) => suite.id !== selectedSuite?.id)} onChange={setEditForm} submitLabel="Uložit změny" disabled={!selectedSuite} />
+            <SuiteFormFields form={editForm} allSuites={editParentOptions} onChange={setEditForm} submitLabel="Uložit změny" disabled={!selectedSuite} />
+            <button
+              className="mt-3 inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!selectedSuite}
+              type="button"
+              onClick={() => void handleDeleteSelectedSuite()}
+            >
+              <Trash2 size={16} /> Smazat suitu
+            </button>
           </form>
         </aside>
       </section>
@@ -388,21 +458,36 @@ function SuiteFormFields({
         />
       </label>
       <label className="block text-sm">
+        <span className="font-medium">Umístění</span>
+        <select
+          className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 disabled:bg-slate-50"
+          disabled={disabled}
+          value={form.placement}
+          onChange={(event) => onChange({ ...form, placement: event.target.value as SuiteForm["placement"], parentSuiteId: "" })}
+        >
+          <option value="root">Root suite bez parenta</option>
+          <option value="child">Podsuite pod existující suitou</option>
+        </select>
+      </label>
+      {form.placement === "child" ? (
+      <label className="block text-sm">
         <span className="font-medium">Parent suite</span>
         <select
           className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 disabled:bg-slate-50"
           disabled={disabled}
           value={form.parentSuiteId}
           onChange={(event) => onChange({ ...form, parentSuiteId: event.target.value })}
+          required
         >
-          <option value="">Root suite</option>
+          <option value="">Vyber parent suitu</option>
           {allSuites.map((suite) => (
             <option key={suite.id} value={suite.id}>
-              {" ".repeat(suite.level * 2)}{suite.name}
+              {suite.path}
             </option>
           ))}
         </select>
       </label>
+      ) : null}
       <label className="block text-sm">
         <span className="font-medium">Popis</span>
         <textarea

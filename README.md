@@ -2,6 +2,12 @@
 
 Interní webová aplikace pro správu test cases, test suites, test runs, výsledků testování a defectů.
 
+Podrobné funkční zadání, vysvětlení procesů a diagramy jsou v dokumentu
+[`docs/zadani-a-architektura.md`](docs/zadani-a-architektura.md).
+
+Produkční nasazení na vlastní Linux server popisuje
+[`docs/linux-deployment.md`](docs/linux-deployment.md).
+
 ## Stack
 
 - Backend: Python FastAPI
@@ -121,3 +127,36 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up --build 
 - `DOCS_ENABLED=false` vypne Swagger/OpenAPI endpointy.
 - Databázi pravidelně zálohuj mimo Docker volume.
 - Před reálným nasazením doplň plnohodnotné přihlášení na frontendu a role/permissions na chráněných operacích.
+
+## Railway deployment
+
+Na Railway nasazuj jako 3 služby:
+
+1. `PostgreSQL` template
+2. `backend` z adresáře `/backend`
+3. `frontend` z adresáře `/frontend`
+
+### Backend služba
+
+- root directory: `/backend`
+- config file: `/backend/railway.json`
+- `APP_ENV=production`
+- `SEED_DEMO_DATA=false`
+- `DOCS_ENABLED=false`
+- `PORT=8000`
+- `DATABASE_URL` nech Railway napojit z PostgreSQL služby
+- `JWT_SECRET_KEY` nastav ručně na silnou hodnotu
+
+### Frontend služba
+
+- root directory: `/frontend`
+- config file: `/frontend/railway.json`
+- `BACKEND_URL=http://backend.railway.internal:8000`
+
+Frontend server na Railway proxyuje `/api` a `/health` na backend, takže pro browser stačí veřejná adresa frontend služby.
+
+### Poznámka k proměnným
+
+- Railway používá reference syntax `${{SERVICE_NAME.VAR}}`
+- pro backend service je v projektu dobré použít přesný název služby, bez diakritiky a mezer
+- pokud backend služba dostane jiný název, uprav podle něj `BACKEND_URL` na tvar `http://NAZEV_SLUZBY.railway.internal:8000`

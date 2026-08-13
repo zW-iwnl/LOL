@@ -27,3 +27,4 @@ class TestRun(TimestampMixin, Base):
     project = relationship("Project", back_populates="test_runs")
     creator = relationship("User", back_populates="created_test_runs", foreign_keys=[created_by])
     test_run_cases = relationship("TestRunCase", back_populates="test_run", cascade="all, delete-orphan")
+    test_plans = relationship("TestPlan", secondary="test_plan_runs", back_populates="test_runs")

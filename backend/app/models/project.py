@@ -20,3 +20,7 @@ class Project(TimestampMixin, Base):
     test_cases = relationship("TestCase", back_populates="project", cascade="all, delete-orphan")
     test_runs = relationship("TestRun", back_populates="project", cascade="all, delete-orphan")
     defects = relationship("Defect", back_populates="project", cascade="all, delete-orphan")
+    releases = relationship("Release", back_populates="project", cascade="all, delete-orphan")
+    milestones = relationship("Milestone", back_populates="project", cascade="all, delete-orphan")
+    test_plans = relationship("TestPlan", back_populates="project", cascade="all, delete-orphan")
+    requirements = relationship("Requirement", back_populates="project", cascade="all, delete-orphan")

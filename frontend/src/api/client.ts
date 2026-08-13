@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const AUTH_TOKEN_STORAGE_KEY = "test-manager-token";
 
 export type Priority = "low" | "medium" | "high" | "critical";
 export type TestCaseStatus = "draft" | "ready" | "deprecated";
@@ -23,6 +24,11 @@ export type User = {
   email: string;
   role: string;
   is_active: boolean;
+};
+
+export type TokenResponse = {
+  access_token: string;
+  token_type: string;
 };
 
 export type Dashboard = {
@@ -85,13 +91,14 @@ export type TestCase = {
   type: string;
   status: TestCaseStatus;
   automated: boolean;
+  version: number;
   created_by: number;
   created_at: string;
   updated_at: string;
   steps: TestStep[];
 };
 
-export type TestCaseCreate = Omit<TestCase, "id" | "project_id" | "created_by" | "created_at" | "updated_at" | "steps"> & {
+export type TestCaseCreate = Omit<TestCase, "id" | "project_id" | "version" | "created_by" | "created_at" | "updated_at" | "steps"> & {
   steps: Array<Pick<TestStep, "step_order" | "action" | "expected_result" | "test_data">>;
 };
 
@@ -109,6 +116,8 @@ export type TestRunCase = {
   executed_by: number | null;
   executed_at: string | null;
   defect_count: number;
+  test_case_version: number;
+  test_case_snapshot: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -181,16 +190,48 @@ export type Defect = Required<Omit<DefectCreate, "description" | "assigned_to">>
   updated_at: string;
 };
 
+export type AuditEvent = {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  action: string;
+  actor_id: number | null;
+  changes: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function getStoredToken() {
+  return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+export function storeToken(token: string) {
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredToken() {
+  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getStoredToken();
+  const headers = new Headers(options.headers);
+  headers.set("Content-Type", "application/json");
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredToken();
+      window.dispatchEvent(new Event("test-manager-auth-expired"));
+    }
     const detail = await response.json().catch(() => null);
     throw new Error(detail?.detail ?? `API chyba ${response.status}`);
   }
@@ -204,6 +245,17 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 export async function healthCheck(): Promise<{ status: string }> {
   return request("/health");
+}
+
+export function login(email: string, password: string) {
+  return request<TokenResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function getCurrentUser() {
+  return request<User>("/auth/me");
 }
 
 export function getProjects() {
@@ -248,9 +300,20 @@ export function updateTestSuite(suiteId: number, payload: Partial<TestSuitePaylo
   });
 }
 
+export function deleteTestSuite(suiteId: number) {
+  return request<void>(`/test-suites/${suiteId}`, {
+    method: "DELETE",
+  });
+}
+
 export function getTestCases(projectId: number, suiteId?: number) {
   const query = suiteId ? `?suite_id=${suiteId}` : "";
   return request<TestCase[]>(`/projects/${projectId}/test-cases${query}`);
+}
+
+export function getAllTestCases(suiteId?: number) {
+  const query = suiteId ? `?suite_id=${suiteId}` : "";
+  return request<TestCase[]>(`/test-cases${query}`);
 }
 
 export function getTestCase(testCaseId: number) {
@@ -332,4 +395,29 @@ export function createDefect(projectId: number, payload: DefectCreate) {
 
 export function getDefects(projectId: number) {
   return request<Defect[]>(`/projects/${projectId}/defects`);
+}
+
+export function updateDefect(defectId: number, payload: Partial<DefectCreate>) {
+  return request<Defect>(`/defects/${defectId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getAuditEvents(params: { entityType?: string; entityId?: number; limit?: number; offset?: number } = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.entityType) {
+    searchParams.set("entity_type", params.entityType);
+  }
+  if (params.entityId) {
+    searchParams.set("entity_id", String(params.entityId));
+  }
+  if (params.limit !== undefined) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset !== undefined) {
+    searchParams.set("offset", String(params.offset));
+  }
+  const query = searchParams.toString();
+  return request<AuditEvent[]>(`/audit-events${query ? `?${query}` : ""}`);
 }

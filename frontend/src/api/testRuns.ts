@@ -12,6 +12,8 @@ export type TestRunCase = {
   executed_by: number | null;
   executed_at: string | null;
   defect_count: number;
+  test_case_version: number;
+  test_case_snapshot: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -127,6 +129,19 @@ export function addCasesToTestRun(testRunId: number, payload: TestRunAddCasesPay
   return request<TestRun>(`/test-runs/${testRunId}/cases`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function updateTestRunCase(testRunCaseId: number, payload: { assigned_to: number | null }) {
+  return request<TestRunCase>(`/test-run-cases/${testRunCaseId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeTestRunCase(testRunCaseId: number) {
+  return request<void>(`/test-run-cases/${testRunCaseId}`, {
+    method: "DELETE",
   });
 }
 

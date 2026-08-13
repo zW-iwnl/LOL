@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -24,6 +24,7 @@ class TestCase(TimestampMixin, Base):
     type: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
     automated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     project = relationship("Project", back_populates="test_cases")
@@ -36,3 +37,4 @@ class TestCase(TimestampMixin, Base):
         order_by="TestStep.step_order",
     )
     test_run_cases = relationship("TestRunCase", back_populates="test_case")
+    requirements = relationship("Requirement", secondary="requirement_test_cases", back_populates="test_cases")
