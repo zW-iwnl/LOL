@@ -5,15 +5,14 @@ export type Priority = "low" | "medium" | "high" | "critical";
 export type TestCaseStatus = "draft" | "ready" | "deprecated";
 export type TestRunStatus = "open" | "in_progress" | "completed" | "archived";
 export type TestRunCaseResult = "not_run" | "passed" | "failed" | "blocked" | "skipped";
-export type DefectStatus = "open" | "in_progress" | "fixed" | "retest" | "closed" | "rejected";
+export type TestRunStepResultValue = "not_run" | "passed" | "failed" | "skipped";
+export type TestStepType = "test" | "information";
+export type TestCaseTagCategory = "business_area" | "application_domain" | "object_type";
 
-export type Project = {
+export type TestCaseTag = {
   id: number;
+  category: TestCaseTagCategory;
   name: string;
-  code: string;
-  description: string | null;
-  status: string;
-  created_by: number;
   created_at: string;
   updated_at: string;
 };
@@ -36,7 +35,6 @@ export type Dashboard = {
     test_cases_count: number;
     active_test_runs_count: number;
     pass_rate: number;
-    open_defects_count: number;
   };
   recent_test_runs: Array<{ id: number; name: string; status: string; environment: string | null }>;
   results: Array<{ result: TestRunCaseResult; count: number }>;
@@ -44,7 +42,6 @@ export type Dashboard = {
 
 export type TestSuite = {
   id: number;
-  project_id: number;
   parent_suite_id: number | null;
   name: string;
   description: string | null;
@@ -55,6 +52,9 @@ export type TestSuite = {
   created_by: number;
   created_at: string;
   updated_at: string;
+  direct_test_case_count: number;
+  total_test_case_count: number;
+  group_ids: number[];
 };
 
 export type TestSuitePayload = {
@@ -65,6 +65,42 @@ export type TestSuitePayload = {
   level?: number;
   sort_order?: number;
   is_active?: boolean;
+  group_ids?: number[];
+};
+
+export type SuiteGroupMember = {
+  group_id: number;
+  suite_id: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SuiteGroupTestCaseMember = {
+  group_id: number;
+  test_case_id: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SuiteGroup = {
+  id: number;
+  parent_group_id: number | null;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  members: SuiteGroupMember[];
+  test_case_members: SuiteGroupTestCaseMember[];
+};
+
+export type SuiteGroupPayload = {
+  parent_group_id?: number | null;
+  name: string;
+  description?: string | null;
+  sort_order?: number;
 };
 
 export type TestStep = {
@@ -72,6 +108,8 @@ export type TestStep = {
   test_case_id: number;
   step_order: number;
   action: string;
+  step_type: TestStepType;
+  note: string | null;
   expected_result: string | null;
   test_data: string | null;
   created_at: string;
@@ -80,15 +118,20 @@ export type TestStep = {
 
 export type TestCase = {
   id: number;
-  project_id: number;
   suite_id: number | null;
   code: string;
   title: string;
   description: string | null;
   preconditions: string | null;
   expected_summary: string | null;
-  priority: Priority;
-  type: string;
+  business_area_id: number | null;
+  application_domain_id: number | null;
+  object_type_id: number | null;
+  business_area: TestCaseTag | null;
+  application_domain: TestCaseTag | null;
+  object_type: TestCaseTag | null;
+  tag_ids: number[];
+  tags: TestCaseTag[];
   status: TestCaseStatus;
   automated: boolean;
   version: number;
@@ -98,13 +141,27 @@ export type TestCase = {
   steps: TestStep[];
 };
 
-export type TestCaseCreate = Omit<TestCase, "id" | "project_id" | "version" | "created_by" | "created_at" | "updated_at" | "steps"> & {
-  steps: Array<Pick<TestStep, "step_order" | "action" | "expected_result" | "test_data">>;
+export type TestCaseCreate = Omit<TestCase, "id" | "version" | "created_by" | "created_at" | "updated_at" | "steps" | "tags" | "tag_ids" | "business_area_id" | "application_domain_id" | "object_type_id" | "business_area" | "application_domain" | "object_type"> & {
+  tag_ids: number[];
+  steps: Array<Pick<TestStep, "step_order" | "action" | "step_type" | "note" | "expected_result" | "test_data">>;
 };
 
 export type TestCaseUpdate = Partial<Omit<TestCaseCreate, "steps">>;
 
-export type TestStepPayload = Pick<TestStep, "step_order" | "action" | "expected_result" | "test_data">;
+export type TestStepPayload = Pick<TestStep, "step_order" | "action" | "step_type" | "note" | "expected_result" | "test_data">;
+
+export type TestRunStepResult = {
+  id: number;
+  test_run_case_id: number;
+  test_run_case_attempt_id: number;
+  test_step_id: number;
+  step_order: number;
+  result: TestRunStepResultValue;
+  executed_by: number | null;
+  executed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type TestRunCase = {
   id: number;
@@ -115,16 +172,15 @@ export type TestRunCase = {
   comment: string | null;
   executed_by: number | null;
   executed_at: string | null;
-  defect_count: number;
   test_case_version: number;
   test_case_snapshot: Record<string, unknown> | null;
+  step_results: TestRunStepResult[];
   created_at: string;
   updated_at: string;
 };
 
 export type TestRun = {
   id: number;
-  project_id: number;
   name: string;
   description: string | null;
   version: string | null;
@@ -143,7 +199,6 @@ export type TestRun = {
 export type TestRunCaseExecution = TestRunCase & {
   code: string;
   title: string;
-  priority: Priority;
   suite_name: string | null;
   test_case: TestCase;
 };
@@ -168,37 +223,6 @@ export type TestRunCreate = {
 export type AddTestCasesPayload = {
   test_case_ids: number[];
   assigned_to?: number | null;
-};
-
-export type DefectCreate = {
-  test_run_case_id?: number | null;
-  title: string;
-  description?: string | null;
-  severity?: Priority;
-  priority?: Priority;
-  status?: DefectStatus;
-  assigned_to?: number | null;
-};
-
-export type Defect = Required<Omit<DefectCreate, "description" | "assigned_to">> & {
-  id: number;
-  project_id: number;
-  description: string | null;
-  assigned_to: number | null;
-  reported_by: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type AuditEvent = {
-  id: number;
-  entity_type: string;
-  entity_id: number;
-  action: string;
-  actor_id: number | null;
-  changes: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
 };
 
 export function getStoredToken() {
@@ -258,20 +282,16 @@ export function getCurrentUser() {
   return request<User>("/auth/me");
 }
 
-export function getProjects() {
-  return request<Project[]>("/projects");
-}
-
 export function getUsers() {
   return request<User[]>("/users");
 }
 
-export function getDashboard(projectId: number) {
-  return request<Dashboard>(`/projects/${projectId}/dashboard`);
+export function getDashboard() {
+  return request<Dashboard>("/dashboard");
 }
 
-export function getTestSuites(projectId: number) {
-  return request<TestSuite[]>(`/projects/${projectId}/test-suites`);
+export function getTestSuites() {
+  return request<TestSuite[]>("/test-suites");
 }
 
 export function getTestSuiteChildren(suiteId: number) {
@@ -282,12 +302,12 @@ export function getTestSuiteTestCases(suiteId: number) {
   return request<TestCase[]>(`/test-suites/${suiteId}/test-cases`);
 }
 
-export function searchTestSuites(projectId: number, query: string) {
-  return request<TestSuite[]>(`/projects/${projectId}/test-suites/search?q=${encodeURIComponent(query)}`);
+export function searchTestSuites(query: string) {
+  return request<TestSuite[]>(`/test-suites/search?q=${encodeURIComponent(query)}`);
 }
 
-export function createTestSuite(projectId: number, payload: TestSuitePayload) {
-  return request<TestSuite>(`/projects/${projectId}/test-suites`, {
+export function createTestSuite(payload: TestSuitePayload) {
+  return request<TestSuite>("/test-suites", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -306,22 +326,87 @@ export function deleteTestSuite(suiteId: number) {
   });
 }
 
-export function getTestCases(projectId: number, suiteId?: number) {
-  const query = suiteId ? `?suite_id=${suiteId}` : "";
-  return request<TestCase[]>(`/projects/${projectId}/test-cases${query}`);
+export function getSuiteGroups() {
+  return request<SuiteGroup[]>("/suite-groups");
 }
 
-export function getAllTestCases(suiteId?: number) {
-  const query = suiteId ? `?suite_id=${suiteId}` : "";
-  return request<TestCase[]>(`/test-cases${query}`);
+export function createSuiteGroup(payload: SuiteGroupPayload) {
+  return request<SuiteGroup>("/suite-groups", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateSuiteGroup(groupId: number, payload: Partial<SuiteGroupPayload>) {
+  return request<SuiteGroup>(`/suite-groups/${groupId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteSuiteGroup(groupId: number) {
+  return request<void>(`/suite-groups/${groupId}`, { method: "DELETE" });
+}
+
+export function addSuiteGroupMember(groupId: number, suiteId: number, sortOrder = 0) {
+  return request<SuiteGroupMember>(`/suite-groups/${groupId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ suite_id: suiteId, sort_order: sortOrder }),
+  });
+}
+
+export function removeSuiteGroupMember(groupId: number, suiteId: number) {
+  return request<void>(`/suite-groups/${groupId}/members/${suiteId}`, { method: "DELETE" });
+}
+
+export function updateSuiteGroupMember(groupId: number, suiteId: number, sortOrder: number) {
+  return request<SuiteGroupMember>(`/suite-groups/${groupId}/members/${suiteId}`, {
+    method: "PUT",
+    body: JSON.stringify({ sort_order: sortOrder }),
+  });
+}
+
+export function setTestSuiteGroups(suiteId: number, groupIds: number[]) {
+  return request<TestSuite>(`/suite-groups/suites/${suiteId}/groups`, {
+    method: "PUT",
+    body: JSON.stringify({ group_ids: groupIds }),
+  });
+}
+
+export function setSuiteGroupTestCases(groupId: number, testCaseIds: number[]) {
+  return request<SuiteGroup>(`/suite-groups/${groupId}/test-case-members`, {
+    method: "PUT",
+    body: JSON.stringify({ test_case_ids: testCaseIds }),
+  });
+}
+
+export type TestCaseFilters = {
+  suiteId?: number;
+  businessAreaIds?: number[];
+  applicationDomainIds?: number[];
+  objectTypeIds?: number[];
+};
+
+function testCaseQuery(filters: TestCaseFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.suiteId) params.set("suite_id", String(filters.suiteId));
+  for (const id of filters.businessAreaIds ?? []) params.append("business_area_id", String(id));
+  for (const id of filters.applicationDomainIds ?? []) params.append("application_domain_id", String(id));
+  for (const id of filters.objectTypeIds ?? []) params.append("object_type_id", String(id));
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export function getTestCases(filters: TestCaseFilters = {}) {
+  return request<TestCase[]>(`/test-cases${testCaseQuery(filters)}`);
 }
 
 export function getTestCase(testCaseId: number) {
   return request<TestCase>(`/test-cases/${testCaseId}`);
 }
 
-export function createTestCase(projectId: number, payload: TestCaseCreate) {
-  return request<TestCase>(`/projects/${projectId}/test-cases`, {
+export function createTestCase(payload: TestCaseCreate) {
+  return request<TestCase>("/test-cases", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -331,6 +416,12 @@ export function updateTestCase(testCaseId: number, payload: TestCaseUpdate) {
   return request<TestCase>(`/test-cases/${testCaseId}`, {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTestCase(testCaseId: number) {
+  return request<void>(`/test-cases/${testCaseId}`, {
+    method: "DELETE",
   });
 }
 
@@ -354,12 +445,37 @@ export function deleteTestStep(stepId: number) {
   });
 }
 
-export function getTestRuns(projectId: number) {
-  return request<TestRun[]>(`/projects/${projectId}/test-runs`);
+export function getTestCaseTags(category?: TestCaseTagCategory) {
+  const query = category ? `?category=${category}` : "";
+  return request<TestCaseTag[]>(`/test-case-tags${query}`);
 }
 
-export function createTestRun(projectId: number, payload: TestRunCreate) {
-  return request<TestRun>(`/projects/${projectId}/test-runs`, {
+export function createTestCaseTag(payload: { category: TestCaseTagCategory; name: string }) {
+  return request<TestCaseTag>("/test-case-tags", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTestCaseTag(tagId: number, payload: { name: string }) {
+  return request<TestCaseTag>(`/test-case-tags/${tagId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTestCaseTag(tagId: number) {
+  return request<void>(`/test-case-tags/${tagId}`, {
+    method: "DELETE",
+  });
+}
+
+export function getTestRuns() {
+  return request<TestRun[]>("/test-runs");
+}
+
+export function createTestRun(payload: TestRunCreate) {
+  return request<TestRun>("/test-runs", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -377,47 +493,11 @@ export function getTestRunExecution(testRunId: number) {
 }
 
 export function updateTestRunCaseResult(
-  testRunCaseId: number,
-  payload: { result: TestRunCaseResult; comment?: string | null; defect?: DefectCreate | null },
+  testRunCaseAttemptId: number,
+  payload: { result: TestRunCaseResult; comment?: string | null },
 ) {
-  return request<TestRunCase>(`/test-run-cases/${testRunCaseId}/result`, {
+  return request<TestRunCase>(`/test-run-case-attempts/${testRunCaseAttemptId}/result`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
-}
-
-export function createDefect(projectId: number, payload: DefectCreate) {
-  return request<Defect>(`/projects/${projectId}/defects`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function getDefects(projectId: number) {
-  return request<Defect[]>(`/projects/${projectId}/defects`);
-}
-
-export function updateDefect(defectId: number, payload: Partial<DefectCreate>) {
-  return request<Defect>(`/defects/${defectId}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function getAuditEvents(params: { entityType?: string; entityId?: number; limit?: number; offset?: number } = {}) {
-  const searchParams = new URLSearchParams();
-  if (params.entityType) {
-    searchParams.set("entity_type", params.entityType);
-  }
-  if (params.entityId) {
-    searchParams.set("entity_id", String(params.entityId));
-  }
-  if (params.limit !== undefined) {
-    searchParams.set("limit", String(params.limit));
-  }
-  if (params.offset !== undefined) {
-    searchParams.set("offset", String(params.offset));
-  }
-  const query = searchParams.toString();
-  return request<AuditEvent[]>(`/audit-events${query ? `?${query}` : ""}`);
 }

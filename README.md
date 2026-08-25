@@ -1,6 +1,6 @@
 # Test Manager
 
-Interní webová aplikace pro správu test cases, test suites, test runs, výsledků testování a defectů.
+Interní webová aplikace pro správu test cases, test suites, test runs, výsledků testování a správy testovacích vlastností.
 
 Podrobné funkční zadání, vysvětlení procesů a diagramy jsou v dokumentu
 [`docs/zadani-a-architektura.md`](docs/zadani-a-architektura.md).
@@ -72,6 +72,26 @@ Lokálně z backend složky:
 cd backend
 alembic -c alembic.ini upgrade head
 ```
+
+## Databázová dokumentace a ERD
+
+SchemaSpy načte aktuální strukturu PostgreSQL a automaticky vygeneruje HTML dokumentaci včetně ER diagramů:
+
+```powershell
+docker compose --profile docs run --rm schemaspy
+```
+
+Výstup otevři v `docs/database-reference/index.html`. Služba `schemaspy` je v samostatném Compose profilu, takže při běžném spuštění aplikace neběží.
+
+U čerstvé databáze nejdřív aplikuj migrace:
+
+```powershell
+docker compose up -d postgres
+docker compose run --rm backend alembic -c alembic.ini upgrade head
+docker compose --profile docs run --rm schemaspy
+```
+
+Podrobnosti jsou v [`docs/database-schema.md`](docs/database-schema.md).
 
 ## Seed demo dat
 

@@ -1,7 +1,7 @@
-import { Activity, Bug, CheckCircle2, ClipboardCheck, PlayCircle, Plus } from "lucide-react";
+import { Activity, CheckCircle2, ClipboardCheck, PlayCircle, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getDashboard, type TestRunCaseResult } from "../api/client";
-import { ErrorState, LoadingState, useApiResource, useCurrentProject } from "../api/hooks";
+import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { resultLabel } from "../data/mockData";
 
 const resultColors: Record<TestRunCaseResult, string> = {
@@ -13,30 +13,25 @@ const resultColors: Record<TestRunCaseResult, string> = {
 };
 
 export function DashboardPage() {
-  const { project, loading: projectLoading, error: projectError } = useCurrentProject();
-  const dashboard = useApiResource(
-    () => (project ? getDashboard(project.id) : Promise.reject(new Error("Není dostupný žádný projekt."))),
-    [project?.id],
-  );
+  const dashboard = useApiResource(() => getDashboard(), []);
 
-  if (projectLoading || dashboard.loading) {
+  if (dashboard.loading) {
     return <LoadingState />;
   }
 
-  if (projectError || dashboard.error || !dashboard.data) {
-    return <ErrorState message={projectError ?? dashboard.error ?? "Dashboard data nejsou dostupná."} />;
+  if (dashboard.error || !dashboard.data) {
+    return <ErrorState message={dashboard.error ?? "Dashboard data nejsou dostupná."} />;
   }
 
   const kpis = [
     { label: "Počet test cases", value: dashboard.data.stats.test_cases_count.toString(), icon: ClipboardCheck },
     { label: "Aktivní test runy", value: dashboard.data.stats.active_test_runs_count.toString(), icon: PlayCircle },
     { label: "Pass rate", value: `${dashboard.data.stats.pass_rate} %`, icon: CheckCircle2 },
-    { label: "Otevřené defecty", value: dashboard.data.stats.open_defects_count.toString(), icon: Bug },
   ];
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
@@ -112,7 +107,6 @@ export function DashboardPage() {
               {[
                 { label: "Nový test case", to: "/test-cases?new=1" },
                 { label: "Založit test run", to: "/test-runs?new=1" },
-                { label: "Nahlásit defect", to: "/defects?new=1" },
                 { label: "Otevřít execution", to: "/test-runs" },
               ].map((action) => (
                 <Link key={action.label} to={action.to} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50">

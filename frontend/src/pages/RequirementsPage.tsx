@@ -15,7 +15,6 @@ import {
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { resultLabel } from "../data/mockData";
-import { useActiveProject } from "../projects/ActiveProjectContext";
 
 const priorities: Priority[] = ["low", "medium", "high", "critical"];
 const statuses: RequirementStatus[] = ["draft", "approved", "deprecated"];
@@ -35,7 +34,6 @@ const priorityLabels: Record<Priority, string> = {
 
 const riskLabels: Record<TraceabilityRow["risk_status"], string> = {
   missing_tests: "Chybí testy",
-  defect_risk: "Otevřené defecty",
   failing: "Selhává",
   partial: "Částečně ověřeno",
   verified: "Ověřeno",
@@ -46,7 +44,6 @@ const resultOptions: Array<TestRunCaseResult | "none"> = ["none", "passed", "fai
 function riskBadgeClass(status: TraceabilityRow["risk_status"]) {
   return {
     missing_tests: "bg-amber-50 text-amber-700",
-    defect_risk: "bg-rose-50 text-rose-700",
     failing: "bg-red-50 text-red-700",
     partial: "bg-sky-50 text-sky-700",
     verified: "bg-emerald-50 text-emerald-700",
@@ -61,11 +58,10 @@ function formatDateTime(value: string | null) {
 }
 
 export function RequirementsPage() {
-  const { activeProjectId, activeProject, loading: projectsLoading, error: projectsError } = useActiveProject();
   const [refreshKey, setRefreshKey] = useState(0);
-  const requirementsState = useApiResource(() => (activeProjectId ? getRequirements(activeProjectId) : Promise.resolve([])), [activeProjectId, refreshKey]);
-  const traceabilityState = useApiResource(() => (activeProjectId ? getTraceability(activeProjectId) : Promise.resolve([])), [activeProjectId, refreshKey]);
-  const casesState = useApiResource(() => (activeProjectId ? getTestCases(activeProjectId) : Promise.resolve([])), [activeProjectId, refreshKey]);
+  const requirementsState = useApiResource(() => getRequirements(), [refreshKey]);
+  const traceabilityState = useApiResource(() => getTraceability(), [refreshKey]);
+  const casesState = useApiResource(() => getTestCases(), [refreshKey]);
   const [form, setForm] = useState({ code: "", title: "", description: "", priority: "medium" as Priority, status: "draft" as RequirementStatus });
   const [selectedCaseIds, setSelectedCaseIds] = useState<number[]>([]);
   const [selectedRequirementId, setSelectedRequirementId] = useState("");
@@ -85,13 +81,11 @@ export function RequirementsPage() {
   const availableCases = testCases.filter((testCase) => !linkedCaseIds.has(testCase.id));
   const kpis = useMemo(() => {
     const covered = rows.filter((row) => row.coverage_status === "covered").length;
-    const openDefects = rows.reduce((sum, row) => sum + row.open_defects.length, 0);
     const verified = rows.filter((row) => row.risk_status === "verified").length;
     return {
       requirements: rows.length,
       covered,
       missing: rows.length - covered,
-      openDefects,
       verified,
     };
   }, [rows]);
@@ -117,23 +111,23 @@ export function RequirementsPage() {
   }, [rows, testCases]);
   const blockedRows = rows.filter((row) => row.risk_status !== "verified");
 
-  if (projectsLoading || requirementsState.loading || traceabilityState.loading || casesState.loading) {
+  if (requirementsState.loading || traceabilityState.loading || casesState.loading) {
     return <LoadingState />;
   }
 
-  if (projectsError || requirementsState.error || traceabilityState.error || casesState.error) {
-    return <ErrorState message={projectsError ?? requirementsState.error ?? traceabilityState.error ?? casesState.error ?? "Requirements nejsou dostupné."} />;
+  if (requirementsState.error || traceabilityState.error || casesState.error) {
+    return <ErrorState message={requirementsState.error ?? traceabilityState.error ?? casesState.error ?? "Requirements nejsou dostupné."} />;
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeProjectId || !form.code.trim() || !form.title.trim()) {
+    if (!form.code.trim() || !form.title.trim()) {
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const requirement = await createRequirement(activeProjectId, {
+      const requirement = await createRequirement({
         code: form.code.trim(),
         title: form.title.trim(),
         description: form.description.trim() || null,
@@ -184,14 +178,13 @@ export function RequirementsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Requirements" description={`Požadavky a traceability matrix${activeProject ? ` pro ${activeProject.name}` : ""}.`} />
+      <PageHeader title="Requirements" description="Požadavky a traceability matrix." />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Požadavky" value={kpis.requirements} />
         <KpiCard label="Pokryté testy" value={kpis.covered} />
         <KpiCard label="Ověřené" value={kpis.verified} />
         <KpiCard label="Bez test case" value={kpis.missing} />
-        <KpiCard label="Otevřené defecty" value={kpis.openDefects} />
       </section>
 
       {error && <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
@@ -239,7 +232,7 @@ export function RequirementsPage() {
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <div className="font-semibold">Traceability matrix</div>
-                <div className="mt-1 text-sm text-slate-500">Požadavky, pokrytí testy, poslední výsledek a otevřené defecty.</div>
+                <div className="mt-1 text-sm text-slate-500">Požadavky, pokrytí testy a poslední výsledek.</div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <label className="flex min-w-56 items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
@@ -270,14 +263,13 @@ export function RequirementsPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th className="px-5 py-3 font-medium">Requirement</th>
                   <th className="px-5 py-3 font-medium">Riziko</th>
                   <th className="px-5 py-3 font-medium">Test cases</th>
                   <th className="px-5 py-3 font-medium">Poslední výsledek</th>
-                  <th className="px-5 py-3 font-medium">Otevřené defecty</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,14 +300,10 @@ export function RequirementsPage() {
                       <div>{row.latest_result ? resultLabel(row.latest_result) : "-"}</div>
                       <div className="text-xs text-slate-500">{formatDateTime(row.latest_executed_at)}</div>
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="font-medium">{row.open_defect_count}</div>
-                      {row.open_defects.map((defect) => <div key={defect.id} className="text-xs text-slate-500">{defect.title}</div>)}
-                    </td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td className="px-5 py-10 text-center text-slate-500" colSpan={5}>Zatím nejsou evidované žádné requirements.</td></tr>}
-                {rows.length > 0 && filteredRows.length === 0 && <tr><td className="px-5 py-10 text-center text-slate-500" colSpan={5}>Filtry neodpovídají žádnému requirementu.</td></tr>}
+                {rows.length === 0 && <tr><td className="px-5 py-10 text-center text-slate-500" colSpan={4}>Zatím nejsou evidované žádné requirements.</td></tr>}
+                {rows.length > 0 && filteredRows.length === 0 && <tr><td className="px-5 py-10 text-center text-slate-500" colSpan={4}>Filtry neodpovídají žádnému requirementu.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -350,7 +338,7 @@ export function RequirementsPage() {
             {unlinkedTestCases.map((testCase) => (
               <div key={testCase.id} className="rounded-md border border-slate-200 px-3 py-2 text-sm">
                 <div className="font-medium">{testCase.code} - {testCase.title}</div>
-                <div className="text-xs text-slate-500">{priorityLabels[testCase.priority]} / {testCase.status}</div>
+                <div className="text-xs text-slate-500">{testCase.status}</div>
               </div>
             ))}
             {unlinkedTestCases.length === 0 && <div className="text-sm text-slate-500">Všechny test cases jsou navázané na requirement.</div>}
@@ -368,7 +356,7 @@ export function RequirementsPage() {
                 <div key={testCase.id} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
                   <div>
                     <div className="font-medium">{testCase.code} - {testCase.title}</div>
-                    <div className="text-xs text-slate-500">{testCase.priority} / {testCase.status}</div>
+                    <div className="text-xs text-slate-500">{testCase.status}</div>
                   </div>
                   <button className="rounded-md p-1 text-slate-500 hover:bg-slate-100" disabled={saving} onClick={() => void handleUnlinkCase(selectedRequirement.id, testCase.id)} title="Odebrat vazbu" type="button">
                     <Trash2 size={16} />
@@ -408,7 +396,7 @@ function CaseChecklist({
   onChange,
   emptyText = "Nejsou dostupné žádné test cases.",
 }: {
-  testCases: Array<{ id: number; code: string; title: string; priority: string; status: string }>;
+  testCases: Array<{ id: number; code: string; title: string; status: string }>;
   selectedIds: number[];
   onChange: (ids: number[]) => void;
   emptyText?: string;
@@ -425,7 +413,7 @@ function CaseChecklist({
           />
           <span>
             <span className="font-medium">{testCase.code} - {testCase.title}</span>
-            <span className="block text-xs text-slate-500">{testCase.priority} / {testCase.status}</span>
+            <span className="block text-xs text-slate-500">{testCase.status}</span>
           </span>
         </label>
       ))}

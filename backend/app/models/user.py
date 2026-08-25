@@ -15,11 +15,6 @@ class User(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="tester")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    created_projects = relationship(
-        "Project",
-        back_populates="creator",
-        foreign_keys="Project.created_by",
-    )
     created_test_suites = relationship(
         "TestSuite",
         back_populates="creator",
@@ -44,14 +39,4 @@ class User(TimestampMixin, Base):
         "TestRunCase",
         back_populates="executor",
         foreign_keys="TestRunCase.executed_by",
-    )
-    assigned_defects = relationship(
-        "Defect",
-        back_populates="assignee",
-        foreign_keys="Defect.assigned_to",
-    )
-    reported_defects = relationship(
-        "Defect",
-        back_populates="reporter",
-        foreign_keys="Defect.reported_by",
     )

@@ -9,7 +9,7 @@ def auth_headers(client: TestClient) -> dict[str, str]:
 
 def create_suite(client: TestClient, headers: dict[str, str], name: str, parent_suite_id: int | None = None) -> dict:
     response = client.post(
-        "/api/projects/1/test-suites",
+        "/api/test-suites",
         headers=headers,
         json={"name": name, "parent_suite_id": parent_suite_id},
     )
@@ -74,3 +74,34 @@ def test_delete_suite_with_child_is_rejected(client: TestClient) -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Nelze smazat suitu, která obsahuje podsuity."
+
+
+def test_suite_searches_path_and_returns_direct_and_recursive_counts(client: TestClient) -> None:
+    headers = auth_headers(client)
+    parent = create_suite(client, headers, "Platby")
+    child = create_suite(client, headers, "Karty", parent["id"])
+
+    for code, suite_id in (("TC-PARENT", parent["id"]), ("TC-CHILD", child["id"])):
+        response = client.post(
+            "/api/test-cases",
+            headers=headers,
+            json={"code": code, "title": code, "suite_id": suite_id},
+        )
+        assert response.status_code == 201
+
+    response = client.get("/api/test-suites", headers=headers)
+    assert response.status_code == 200
+    suites = {suite["id"]: suite for suite in response.json()}
+    assert suites[parent["id"]]["direct_test_case_count"] == 1
+    assert suites[parent["id"]]["total_test_case_count"] == 2
+    assert suites[child["id"]]["direct_test_case_count"] == 1
+    assert suites[child["id"]]["total_test_case_count"] == 1
+
+    search = client.get(
+        "/api/test-suites/search",
+        headers=headers,
+        params={"q": "Platby/Karty"},
+    )
+    assert search.status_code == 200
+    assert [suite["id"] for suite in search.json()] == [child["id"]]
+    assert search.json()[0]["total_test_case_count"] == 1

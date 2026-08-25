@@ -19,7 +19,6 @@ class TestRunCase(TimestampMixin, Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    defect_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     test_case_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     test_case_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -27,7 +26,28 @@ class TestRunCase(TimestampMixin, Base):
     test_case = relationship("TestCase", back_populates="test_run_cases")
     assignee = relationship("User", back_populates="assigned_test_run_cases", foreign_keys=[assigned_to])
     executor = relationship("User", back_populates="executed_test_run_cases", foreign_keys=[executed_by])
-    defects = relationship("Defect", back_populates="test_run_case")
+    case_attempts = relationship(
+        "TestRunCaseAttempt",
+        back_populates="test_run_case",
+        cascade="all, delete-orphan",
+    )
+    all_step_results = relationship(
+        "TestRunStepResult",
+        back_populates="test_run_case",
+        cascade="all, delete-orphan",
+        order_by="TestRunStepResult.step_order",
+    )
+
+    @property
+    def latest_case_attempt(self):
+        if not self.case_attempts:
+            return None
+        return max(self.case_attempts, key=lambda item: (item.test_run_attempt.attempt_number, item.attempt_number))
+
+    @property
+    def step_results(self):
+        latest = self.latest_case_attempt
+        return latest.step_results if latest else []
 
     @property
     def code(self) -> str:
@@ -37,9 +57,6 @@ class TestRunCase(TimestampMixin, Base):
     def title(self) -> str:
         return self.test_case.title
 
-    @property
-    def priority(self) -> str:
-        return self.test_case.priority
 
     @property
     def suite_name(self) -> str | None:

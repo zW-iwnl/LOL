@@ -1,19 +1,18 @@
 # Test Manager - zadání, fungování a architektura
 
+> Projektové části tohoto původního návrhu jsou od 2026-08-24 neplatné. Aktuální architekturu popisuje [Jedno globální repository bez projektů](single-repository-architecture.md).
+
 ## 1. Vysvětlení systému v jedné minutě
 
-Test Manager je interní webová aplikace pro řízení manuálního testování. Na jednom místě udržuje projekty, požadavky, testovací scénáře, jejich kroky, testovací plány, konkrétní běhy testů, výsledky provedení a nalezené defecty.
-
-![Jak funguje Test Manager](test-manager-fungovani.png)
+Test Manager je interní webová aplikace pro řízení manuálního testování projektů, požadavků, testovacích scénářů, běhů a výsledků.
 
 Princip je následující:
 
 1. Vedoucí nebo analytik založí projekt a požadavky.
 2. Test analytik připraví test cases, zařadí je do stromu test suites a propojí je s požadavky.
-3. Pro release, sprint nebo UAT vznikne test plan a jeden či více test runs.
+3. Pro konkrétní verzi a prostředí vznikne jeden či více test runs.
 4. Tester v execution obrazovce provede jednotlivé kroky a uloží výsledek.
-5. Neúspěšný test může být převeden na defect, který se dále řeší a znovu testuje.
-6. Dashboard z výsledků ukazuje stav a úspěšnost testování.
+5. Dashboard z výsledků ukazuje stav a úspěšnost testování.
 
 Systém tak vytváří dohledatelnou cestu od požadavku přes test až k výsledku a případné chybě.
 
@@ -21,7 +20,7 @@ Systém tak vytváří dohledatelnou cestu od požadavku přes test až k výsle
 
 ### 2.1 Výchozí problém
 
-Testovací tým potřebuje jednotné místo pro evidenci testů a jejich provádění. Bez něj bývají test cases rozptýlené v tabulkách a dokumentech, výsledky nejsou konzistentní, defecty nemají vazbu na konkrétní provedení a nelze rychle určit stav kvality projektu.
+Testovací tým potřebuje jednotné místo pro evidenci testů, jejich plánování a konzistentní ukládání výsledků.
 
 ### 2.2 Cíl
 
@@ -29,9 +28,7 @@ Vytvořit interní alternativu k základním funkcím nástrojů JIRA/Xray/Zephy
 
 - řídit testovací aktivity po projektech;
 - udržovat znovupoužitelné repository test cases;
-- plánovat testování pro release, sprint nebo UAT;
 - přiřazovat práci testerům a zaznamenávat výsledky;
-- evidovat defecty včetně vazby na selhaný test;
 - sledovat pokrytí požadavků a historii změn;
 - zobrazit souhrnný stav testování na dashboardu.
 
@@ -43,11 +40,9 @@ Vytvořit interní alternativu k základním funkcím nástrojů JIRA/Xray/Zephy
 | Projekty | Zakládat, upravovat, vyhledávat a oddělovat data jednotlivých projektů. |
 | Requirements | Evidovat požadavky a propojovat je s test cases pro traceability. |
 | Test Suites | Organizovat testy v libovolně hlubokém stromu oblastí a podoblastí. |
-| Test Cases | Evidovat popis, předpoklady, prioritu, typ, stav, verzi a jednotlivé kroky. |
-| Test Plans | Seskupit testovací běhy pro release, milník, sprint nebo UAT. |
+| Test Cases | Evidovat popis, předpoklady, stav, verzi a jednotlivé kroky. |
 | Test Runs | Vybrat sadu test cases, verzi, prostředí, termín a přiřazené testery. |
 | Execution | Postupně provádět testy a ukládat výsledek, komentář, čas a autora provedení. |
-| Defects | Založit chybu ručně nebo ze selhaného testu a řídit její životní cyklus. |
 | Dashboard | Ukázat KPI a souhrnné výsledky aktivního projektu. |
 | Audit | Uchovat záznam důležitých změn včetně aktéra a změněných hodnot. |
 
@@ -57,8 +52,7 @@ Vytvořit interní alternativu k základním funkcím nástrojů JIRA/Xray/Zephy
 | --- | --- |
 | Test manager | Zakládá plán, připravuje test runs, sleduje průběh a vyhodnocuje výsledek. |
 | Test analytik | Navrhuje test cases, kroky, strukturu suites a vazby na požadavky. |
-| Tester | Provádí přidělené testy, ukládá výsledky a zakládá defecty. |
-| Vývojář / řešitel | Analyzuje defect, mění jeho stav a předává opravu k retestu. |
+| Tester | Provádí přidělené testy a ukládá výsledky jednotlivých kroků i celého testu. |
 | Vedoucí projektu | Sleduje dashboard, pokrytí, pass rate a otevřená rizika. |
 
 Poznámka: aplikace ukládá roli uživatele, ale současná ochrana API je primárně založena na přihlášení. Detailní oprávnění pro jednotlivé role jsou vhodné jako další etapa.
@@ -71,20 +65,14 @@ flowchart LR
     A --> C[Test Suites]
     C --> D[Test Cases]
     B <-->|pokrytí| D
-    D --> E[Test Plan]
-    E --> F[Test Run]
     D --> F
     F --> G[Execution]
     G --> H{Výsledek}
     H -->|Passed| I[Úspěšný test]
-    H -->|Failed| J[Defect]
+    H -->|Failed| O[Dashboard a vyhodnocení]
     H -->|Blocked| K[Odstranění překážky]
     H -->|Skipped| L[Vědomě vynecháno]
-    J --> M[Oprava]
-    M --> N[Retest]
-    N --> G
     I --> O[Dashboard a vyhodnocení]
-    J --> O
     K --> O
     L --> O
 ```
@@ -93,11 +81,10 @@ flowchart LR
 
 **Příprava:** Projekt je nejvyšší organizační celek. V něm vznikají požadavky a repository test cases. Test suites slouží jako složky ve stromu, zatímco test case je znovupoužitelný předpis testu s očíslovanými kroky a očekávanými výsledky.
 
-**Plánování:** Test plan představuje větší testovací aktivitu, například ověření releasu. Obsahuje jeden nebo více test runs. Test run je konkrétní provedení vybrané sady test cases v určené verzi a prostředí.
+**Plánování:** Test run je konkrétní provedení vybrané sady test cases v určené verzi a prostředí.
 
 **Provedení:** Přidáním test case do runu vznikne samostatná položka `TestRunCase`. Ta drží aktuální výsledek, komentář, přiřazeného testera a snímek verze test case platné v době vytvoření runu. Pozdější změna repository testu tak nezmění historický obsah běhu.
 
-**Vyhodnocení:** Tester ukládá `passed`, `failed`, `blocked` nebo `skipped`. Selhání lze propojit s defectem. Souhrny test runu a dashboard se počítají z výsledků jednotlivých `TestRunCase` položek.
 
 ## 4. Životní cykly
 
@@ -126,19 +113,7 @@ stateDiagram-v2
     completed --> archived: uzavření historie
 ```
 
-### Defect
 
-```mermaid
-stateDiagram-v2
-    [*] --> open
-    open --> in_progress: zahájit řešení
-    in_progress --> fixed: oprava dokončena
-    fixed --> retest: předat testerovi
-    retest --> closed: retest úspěšný
-    retest --> open: retest selhal
-    open --> rejected: chyba zamítnuta
-    in_progress --> rejected: chyba zamítnuta
-```
 
 ## 5. Technická architektura
 
@@ -168,13 +143,10 @@ flowchart TB
 
     DB[(PostgreSQL)]
     MIG[Alembic migrace]
-    AUDIT[Audit events]
 
     U -->|HTTP, port 5173| UI
     API -->|JSON REST + Bearer JWT| ROUTES
     ORM -->|SQL, port 5432| DB
-    SERVICES --> AUDIT
-    AUDIT --> ORM
     MIG --> DB
 ```
 
@@ -187,10 +159,9 @@ flowchart TB
 | Frontend API klient | Sestavení HTTP požadavků, přidání JWT a zpracování odpovědí API. |
 | FastAPI routes | REST endpointy, parametry požadavku, odpovědi a HTTP stavové kódy. |
 | Pydantic schemas | Kontrola povinných polí, datových typů a formátu vstupních dat. |
-| Services | Obchodní pravidla, práce s entitami, výpočty a audit změn. |
+| Services | Obchodní pravidla, práce s entitami a výpočty. |
 | SQLAlchemy models | Mapování doménových entit a vazeb do databázových tabulek. |
 | Alembic | Verzované změny databázového schématu. |
-| PostgreSQL | Trvalé uložení uživatelů, projektů, testů, výsledků a defectů. |
 
 ### Tok jednoho požadavku
 
@@ -198,11 +169,12 @@ flowchart TB
 2. API klient odešle JSON požadavek s JWT v hlavičce `Authorization`.
 3. FastAPI ověří token a Pydantic zvaliduje vstupní data.
 4. Route předá operaci service vrstvě.
-5. Service provede obchodní pravidlo, aktualizuje SQLAlchemy model a případně zapíše audit event.
+5. Service provede obchodní pravidlo a aktualizuje SQLAlchemy model.
 6. SQLAlchemy uloží transakci do PostgreSQL.
 7. API vrátí JSON odpověď a React aktualizuje obrazovku.
 
-## 6. Sekvence provedení testu a založení defectu
+
+## 6. Sekvence provedení testu
 
 ```mermaid
 sequenceDiagram
@@ -227,10 +199,6 @@ sequenceDiagram
     DB-->>Service: Potvrzení transakce
     Service-->>UI: Aktualizovaná položka
 
-    Tester->>UI: Založí defect
-    UI->>API: POST /projects/{id}/defects
-    API->>DB: INSERT defect s vazbou na test_run_case
-    DB-->>UI: Vytvořený defect
 ```
 
 ## 7. Datový model
@@ -240,30 +208,20 @@ erDiagram
     USER ||--o{ PROJECT : creates
     USER ||--o{ TEST_CASE : creates
     USER ||--o{ TEST_RUN_CASE : executes
-    USER ||--o{ DEFECT : reports
 
     PROJECT ||--o{ TEST_SUITE : contains
     PROJECT ||--o{ TEST_CASE : contains
     PROJECT ||--o{ REQUIREMENT : contains
-    PROJECT ||--o{ RELEASE : plans
-    PROJECT ||--o{ MILESTONE : plans
-    PROJECT ||--o{ TEST_PLAN : plans
     PROJECT ||--o{ TEST_RUN : executes
-    PROJECT ||--o{ DEFECT : tracks
 
     TEST_SUITE o|--o{ TEST_SUITE : parent_of
     TEST_SUITE o|--o{ TEST_CASE : groups
     TEST_CASE ||--o{ TEST_STEP : consists_of
     REQUIREMENT }o--o{ TEST_CASE : covered_by
 
-    RELEASE o|--o{ MILESTONE : contains
-    RELEASE o|--o{ TEST_PLAN : scopes
-    MILESTONE o|--o{ TEST_PLAN : scopes
-    TEST_PLAN }o--o{ TEST_RUN : groups
 
     TEST_RUN ||--o{ TEST_RUN_CASE : contains
     TEST_CASE ||--o{ TEST_RUN_CASE : instantiated_as
-    TEST_RUN_CASE ||--o{ DEFECT : produces
     USER ||--o{ AUDIT_EVENT : performs
 ```
 
@@ -274,15 +232,11 @@ erDiagram
 | `User` | Přihlášený uživatel, jeho role a aktivita. |
 | `Project` | Izolovaný prostor pro všechna testovací data konkrétního produktu. |
 | `TestSuite` | Uzel stromové struktury; odkazuje na volitelnou nadřazenou suite. |
-| `TestCase` | Znovupoužitelný testovací scénář s prioritou, stavem a verzí. |
+| `TestCase` | Znovupoužitelný testovací scénář se stavem a verzí. |
 | `TestStep` | Jeden krok testu: akce, testovací data a očekávaný výsledek. |
 | `Requirement` | Požadavek propojitelný s více test cases; podklad pro pokrytí. |
-| `Release` / `Milestone` | Časový a produktový kontext plánovaného testování. |
-| `TestPlan` | Nadřazený plán sdružující více test runs. |
 | `TestRun` | Konkrétní sada testů prováděná pro verzi a prostředí. |
 | `TestRunCase` | Jedno provedení jednoho test case v konkrétním runu. |
-| `Defect` | Nalezená chyba, volitelně napojená na konkrétní selhané provedení. |
-| `AuditEvent` | Historie změn entity, provedená akce, aktér a změněné hodnoty. |
 
 ## 8. Důležitá obchodní pravidla
 
@@ -295,7 +249,6 @@ erDiagram
 - Výchozí výsledek nového provedení je `not_run`.
 - Při provedení se ukládá verze a snapshot test case, aby historie zůstala reprodukovatelná.
 - Výsledek provedení je právě jeden z `not_run`, `passed`, `failed`, `blocked`, `skipped`.
-- Defect může vzniknout samostatně nebo s vazbou na `TestRunCase`.
 - Archivovaný test run se považuje za historický a nemá se dále měnit.
 - Změny důležitých entit mají vytvářet auditní záznam.
 
@@ -319,16 +272,14 @@ erDiagram
 2. Založí požadavek `REQ-001`.
 3. Ve stromu vytvoří suite a v ní test case se dvěma kroky.
 4. Propojí test case s požadavkem a ověří traceability.
-5. Založí test plan a test run pro konkrétní verzi a prostředí.
+5. Založí test run pro konkrétní verzi a prostředí.
 6. Přidá test case do runu a přiřadí testera.
 7. Tester otevře execution, provede kroky a uloží výsledek `failed` s komentářem.
-8. Ze selhaného provedení založí defect.
-9. Defect projde stavy `open`, `in_progress`, `fixed`, `retest` a `closed`.
-10. Dashboard a detail runu zobrazí aktualizovaný průběh a výsledky.
+8. Dashboard a detail runu zobrazí aktualizovaný průběh a výsledky.
 
 ## 11. Aktuální stav a hranice řešení
 
-Aktuální aplikace má implementované hlavní stránky a REST operace pro přihlášení, projekty, requirements, test suites, test cases, plánování, test runs, execution, defecty, dashboard a audit.
+Aktuální aplikace obsahuje přihlášení, projekty, requirements, test suites, test cases, test runs, execution, dashboard a audit.
 
 Reporty a nastavení jsou zatím připravené jako základní obrazovky, nikoliv jako plně dokončené moduly. Detailní role a oprávnění, externí integrace, přílohy, notifikace a automatizované importy/exporty patří do navazující etapy.
 

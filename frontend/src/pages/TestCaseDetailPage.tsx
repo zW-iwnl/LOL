@@ -5,17 +5,18 @@ import {
   createTestStep,
   deleteTestStep,
   getTestCase,
+  getTestCaseTags,
   getTestSuites,
   updateTestCase,
   updateTestStep,
-  type Priority,
   type TestCase,
   type TestCaseStatus,
   type TestStep,
+  type TestStepType,
 } from "../api/client";
-import { ErrorState, LoadingState, useApiResource, useCurrentProject } from "../api/hooks";
+import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
+import { MultiTagSelect, TagChips } from "../components/TestCaseTags";
 
-const priorities: Priority[] = ["low", "medium", "high", "critical"];
 const statuses: TestCaseStatus[] = ["draft", "ready", "deprecated"];
 
 type EditForm = {
@@ -25,24 +26,27 @@ type EditForm = {
   description: string;
   preconditions: string;
   expectedSummary: string;
-  priority: Priority;
-  type: string;
   status: TestCaseStatus;
+  tagIds: number[];
   automated: boolean;
 };
 
 type StepForm = {
   stepOrder: string;
+  stepType: TestStepType;
   action: string;
   expectedResult: string;
   testData: string;
+  note: string;
 };
 
 const emptyStepForm: StepForm = {
   stepOrder: "",
+  stepType: "test",
   action: "",
   expectedResult: "",
   testData: "",
+  note: "",
 };
 
 function formFromTestCase(testCase: TestCase): EditForm {
@@ -53,9 +57,8 @@ function formFromTestCase(testCase: TestCase): EditForm {
     description: testCase.description ?? "",
     preconditions: testCase.preconditions ?? "",
     expectedSummary: testCase.expected_summary ?? "",
-    priority: testCase.priority,
-    type: testCase.type,
     status: testCase.status,
+    tagIds: testCase.tag_ids,
     automated: testCase.automated,
   };
 }
@@ -63,16 +66,17 @@ function formFromTestCase(testCase: TestCase): EditForm {
 function stepFormFromStep(step: TestStep): StepForm {
   return {
     stepOrder: step.step_order.toString(),
+    stepType: step.step_type,
     action: step.action,
     expectedResult: step.expected_result ?? "",
     testData: step.test_data ?? "",
+    note: step.note ?? "",
   };
 }
 
 export function TestCaseDetailPage() {
   const { testCaseId } = useParams();
   const numericTestCaseId = Number(testCaseId);
-  const { project, loading: projectLoading, error: projectError } = useCurrentProject();
   const [refreshKey, setRefreshKey] = useState(0);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [newStepForm, setNewStepForm] = useState<StepForm>({ ...emptyStepForm, stepOrder: "1" });
@@ -83,7 +87,10 @@ export function TestCaseDetailPage() {
     () => (Number.isFinite(numericTestCaseId) ? getTestCase(numericTestCaseId) : Promise.reject(new Error("Neplatné ID test case."))),
     [numericTestCaseId, refreshKey],
   );
-  const suitesState = useApiResource(() => (project ? getTestSuites(project.id) : Promise.resolve([])), [project?.id]);
+  const suitesState = useApiResource(() => getTestSuites(), []);
+  const tagsState = useApiResource(() => getTestCaseTags(), []);
+  const tagsFor = (category: "business_area" | "application_domain" | "object_type") =>
+    (tagsState.data ?? []).filter((tag) => tag.category === category);
 
   useEffect(() => {
     if (testCaseState.data) {
@@ -101,11 +108,10 @@ export function TestCaseDetailPage() {
     [testCaseState.data?.steps],
   );
 
-  const suiteName = suitesState.data?.find((suite) => suite.id === testCaseState.data?.suite_id)?.name ?? "Bez suity";
+  const suiteName = suitesState.data?.find((suite) => suite.id === testCaseState.data?.suite_id)?.name ?? "Počátek vesmíru";
 
   function validateTestCaseForm(form: EditForm): string | null {
     if (!form.title.trim()) return "Title je povinný.";
-    if (!priorities.includes(form.priority)) return "Priority musí být low, medium, high nebo critical.";
     if (!statuses.includes(form.status)) return "Status musí být draft, ready nebo deprecated.";
     return null;
   }
@@ -133,9 +139,8 @@ export function TestCaseDetailPage() {
         description: editForm.description.trim() || null,
         preconditions: editForm.preconditions.trim() || null,
         expected_summary: editForm.expectedSummary.trim() || null,
-        priority: editForm.priority,
-        type: editForm.type.trim() || "manual",
         status: editForm.status,
+        tag_ids: editForm.tagIds,
         automated: editForm.automated,
       });
       setRefreshKey((value) => value + 1);
@@ -158,8 +163,10 @@ export function TestCaseDetailPage() {
       await createTestStep(testCaseState.data.id, {
         step_order: Number(newStepForm.stepOrder),
         action: newStepForm.action.trim(),
-        expected_result: newStepForm.expectedResult.trim() || null,
-        test_data: newStepForm.testData.trim() || null,
+        step_type: newStepForm.stepType,
+        note: newStepForm.note.trim() || null,
+        expected_result: newStepForm.stepType === "test" ? newStepForm.expectedResult.trim() || null : null,
+        test_data: newStepForm.stepType === "test" ? newStepForm.testData.trim() || null : null,
       });
       setRefreshKey((value) => value + 1);
       setMessage("Krok byl přidán.");
@@ -181,8 +188,10 @@ export function TestCaseDetailPage() {
       await updateTestStep(stepId, {
         step_order: Number(form.stepOrder),
         action: form.action.trim(),
-        expected_result: form.expectedResult.trim() || null,
-        test_data: form.testData.trim() || null,
+        step_type: form.stepType,
+        note: form.note.trim() || null,
+        expected_result: form.stepType === "test" ? form.expectedResult.trim() || null : null,
+        test_data: form.stepType === "test" ? form.testData.trim() || null : null,
       });
       setRefreshKey((value) => value + 1);
       setMessage("Krok byl upraven.");
@@ -203,12 +212,12 @@ export function TestCaseDetailPage() {
     }
   }
 
-  if (projectLoading || testCaseState.loading || suitesState.loading || !editForm) {
+  if (testCaseState.loading || suitesState.loading || tagsState.loading || !editForm) {
     return <LoadingState />;
   }
 
-  if (projectError || testCaseState.error || suitesState.error) {
-    return <ErrorState message={projectError ?? testCaseState.error ?? suitesState.error ?? "Data nejsou dostupná."} />;
+  if (testCaseState.error || suitesState.error || tagsState.error) {
+    return <ErrorState message={testCaseState.error ?? suitesState.error ?? tagsState.error ?? "Data nejsou dostupná."} />;
   }
 
   const testCase = testCaseState.data;
@@ -236,8 +245,9 @@ export function TestCaseDetailPage() {
             <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
               <div><dt className="text-slate-500">Code</dt><dd className="mt-1 font-medium">{testCase.code}</dd></div>
               <div><dt className="text-slate-500">Suite</dt><dd className="mt-1 font-medium">{suiteName}</dd></div>
-              <div><dt className="text-slate-500">Priority</dt><dd className="mt-1 font-medium">{testCase.priority}</dd></div>
-              <div><dt className="text-slate-500">Type</dt><dd className="mt-1 font-medium">{testCase.type}</dd></div>
+              <TagChips label="Business oblast" values={testCase.tags.filter((tag) => tag.category === "business_area").map((tag) => tag.name)} />
+              <TagChips label="Aplikace/doména" values={testCase.tags.filter((tag) => tag.category === "application_domain").map((tag) => tag.name)} />
+              <TagChips label="Objekt" values={testCase.tags.filter((tag) => tag.category === "object_type").map((tag) => tag.name)} />
               <div><dt className="text-slate-500">Status</dt><dd className="mt-1 font-medium">{testCase.status}</dd></div>
               <div><dt className="text-slate-500">Automated</dt><dd className="mt-1 font-medium">{testCase.automated ? "Ano" : "Ne"}</dd></div>
               <div className="md:col-span-2"><dt className="text-slate-500">Description</dt><dd className="mt-1">{testCase.description ?? "-"}</dd></div>
@@ -256,23 +266,38 @@ export function TestCaseDetailPage() {
                 const form = editingSteps[step.id] ?? stepFormFromStep(step);
                 return (
                   <div key={step.id} className="p-5">
-                    <div className="grid gap-3 md:grid-cols-[110px_1fr_1fr]">
+                    <div className="grid gap-3 md:grid-cols-[110px_170px_1fr_1fr]">
                       <label className="text-sm">
                         <span className="font-medium">Step order</span>
                         <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="number" value={form.stepOrder} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, stepOrder: event.target.value } })} />
                       </label>
                       <label className="text-sm">
+                        <span className="font-medium">Typ kroku</span>
+                        <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={form.stepType} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, stepType: event.target.value as TestStepType, expectedResult: event.target.value === "information" ? "" : form.expectedResult, testData: event.target.value === "information" ? "" : form.testData } })}>
+                          <option value="test">Testovací</option>
+                          <option value="information">Netestovací</option>
+                        </select>
+                      </label>
+                      <label className="text-sm">
                         <span className="font-medium">Action</span>
                         <textarea className="mt-1 min-h-20 w-full rounded-md border border-slate-200 px-3 py-2" value={form.action} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, action: event.target.value } })} />
                       </label>
+                      {form.stepType === "test" ? (
                       <label className="text-sm">
                         <span className="font-medium">Expected result</span>
                         <textarea className="mt-1 min-h-20 w-full rounded-md border border-slate-200 px-3 py-2" value={form.expectedResult} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, expectedResult: event.target.value } })} />
                       </label>
+                      ) : null}
                     </div>
+                    {form.stepType === "test" ? (
                     <label className="mt-3 block text-sm">
                       <span className="font-medium">Test data</span>
                       <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={form.testData} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, testData: event.target.value } })} />
+                    </label>
+                    ) : null}
+                    <label className="mt-3 block text-sm">
+                      <span className="font-medium">Poznámka</span>
+                      <textarea className="mt-1 min-h-16 w-full rounded-md border border-slate-200 px-3 py-2" value={form.note} onChange={(event) => setEditingSteps({ ...editingSteps, [step.id]: { ...form, note: event.target.value } })} />
                     </label>
                     <div className="mt-3 flex gap-2">
                       <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="button" onClick={() => void handleUpdateStep(step.id)}>
@@ -305,7 +330,7 @@ export function TestCaseDetailPage() {
               <label className="block text-sm">
                 <span className="font-medium">Suite</span>
                 <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={editForm.suiteId} onChange={(event) => setEditForm({ ...editForm, suiteId: event.target.value })}>
-                  <option value="">Bez suity</option>
+                  <option value="">Počátek vesmíru</option>
                   {(suitesState.data ?? []).map((suite) => <option key={suite.id} value={suite.id}>{" ".repeat(suite.level * 2)}{suite.name}</option>)}
                 </select>
               </label>
@@ -323,22 +348,29 @@ export function TestCaseDetailPage() {
               </label>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm">
-                  <span className="font-medium">Priority</span>
-                  <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={editForm.priority} onChange={(event) => setEditForm({ ...editForm, priority: event.target.value as Priority })}>
-                    {priorities.map((priority) => <option key={priority}>{priority}</option>)}
-                  </select>
-                </label>
-                <label className="text-sm">
                   <span className="font-medium">Status</span>
                   <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={editForm.status} onChange={(event) => setEditForm({ ...editForm, status: event.target.value as TestCaseStatus })}>
                     {statuses.map((status) => <option key={status}>{status}</option>)}
                   </select>
                 </label>
               </div>
-              <label className="block text-sm">
-                <span className="font-medium">Type</span>
-                <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={editForm.type} onChange={(event) => setEditForm({ ...editForm, type: event.target.value })} />
-              </label>
+              {([
+                ["business_area", "Business oblast"],
+                ["application_domain", "Aplikace/doména"],
+                ["object_type", "Objekt"],
+              ] as const).map(([category, label]) => {
+                const categoryTags = tagsFor(category);
+                const categoryIds = new Set(categoryTags.map((tag) => tag.id));
+                return (
+                  <MultiTagSelect
+                    key={category}
+                    label={label}
+                    values={editForm.tagIds.filter((id) => categoryIds.has(id))}
+                    tags={categoryTags}
+                    onChange={(values) => setEditForm({ ...editForm, tagIds: [...editForm.tagIds.filter((id) => !categoryIds.has(id)), ...values] })}
+                  />
+                );
+              })}
               <label className="flex items-center gap-2 text-sm">
                 <input checked={editForm.automated} type="checkbox" onChange={(event) => setEditForm({ ...editForm, automated: event.target.checked })} />
                 Automated
@@ -357,9 +389,18 @@ export function TestCaseDetailPage() {
                 <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="number" value={newStepForm.stepOrder} onChange={(event) => setNewStepForm({ ...newStepForm, stepOrder: event.target.value })} />
               </label>
               <label className="block text-sm">
+                <span className="font-medium">Typ kroku</span>
+                <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={newStepForm.stepType} onChange={(event) => setNewStepForm({ ...newStepForm, stepType: event.target.value as TestStepType, expectedResult: event.target.value === "information" ? "" : newStepForm.expectedResult, testData: event.target.value === "information" ? "" : newStepForm.testData })}>
+                  <option value="test">Testovací</option>
+                  <option value="information">Netestovací</option>
+                </select>
+              </label>
+              <label className="block text-sm">
                 <span className="font-medium">Action</span>
                 <textarea className="mt-1 min-h-20 w-full rounded-md border border-slate-200 px-3 py-2" value={newStepForm.action} onChange={(event) => setNewStepForm({ ...newStepForm, action: event.target.value })} />
               </label>
+              {newStepForm.stepType === "test" ? (
+                <>
               <label className="block text-sm">
                 <span className="font-medium">Expected result</span>
                 <textarea className="mt-1 min-h-20 w-full rounded-md border border-slate-200 px-3 py-2" value={newStepForm.expectedResult} onChange={(event) => setNewStepForm({ ...newStepForm, expectedResult: event.target.value })} />
@@ -367,6 +408,14 @@ export function TestCaseDetailPage() {
               <label className="block text-sm">
                 <span className="font-medium">Test data</span>
                 <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={newStepForm.testData} onChange={(event) => setNewStepForm({ ...newStepForm, testData: event.target.value })} />
+              </label>
+                </>
+              ) : (
+                <div className="rounded-md bg-sky-50 p-3 text-sm text-sky-700">Netestovací krok se v execution nevyhodnocuje.</div>
+              )}
+              <label className="block text-sm">
+                <span className="font-medium">Poznámka</span>
+                <textarea className="mt-1 min-h-16 w-full rounded-md border border-slate-200 px-3 py-2" value={newStepForm.note} onChange={(event) => setNewStepForm({ ...newStepForm, note: event.target.value })} />
               </label>
               <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" type="submit">
                 <Plus size={16} /> Přidat krok

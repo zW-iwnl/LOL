@@ -4,7 +4,10 @@ server {
 
     root /usr/share/nginx/html;
     index index.html;
-    resolver 127.0.0.11 valid=10s ipv6=off;
+    # Railway private networking can be IPv6-only in legacy environments.
+    # Keep both A and AAAA lookups enabled so the backend remains reachable
+    # in Docker Compose as well as on Railway.
+    resolver 127.0.0.11 valid=10s;
 
     set $backend ${BACKEND_URL};
 

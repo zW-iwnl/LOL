@@ -1,35 +1,52 @@
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import TestSuite, User
+from app.models import TestCase, TestSuite, User
 from app.schemas.test_suite import TestSuiteCreate, TestSuiteUpdate
-from app.services.common import apply_updates, get_project_or_404, not_found
+from app.services.common import not_found
+from app.services import suite_groups as group_service
 
 
-def list_suites(db: Session, project_id: int) -> list[TestSuite]:
-    get_project_or_404(db, project_id)
-    return (
+def list_suites(db: Session) -> list[TestSuite]:
+    suites = (
         db.query(TestSuite)
-        .filter(TestSuite.project_id == project_id)
+        .options(selectinload(TestSuite.group_memberships))
         .order_by(TestSuite.path, TestSuite.sort_order, TestSuite.name)
         .all()
     )
+    direct_counts = dict(
+        db.query(TestCase.suite_id, func.count(TestCase.id))
+        .filter(TestCase.suite_id.isnot(None))
+        .group_by(TestCase.suite_id)
+        .all()
+    )
+    total_counts = {suite.id: direct_counts.get(suite.id, 0) for suite in suites}
+    for suite in sorted(suites, key=lambda item: item.level, reverse=True):
+        if suite.parent_suite_id in total_counts:
+            total_counts[suite.parent_suite_id] += total_counts[suite.id]
+    for suite in suites:
+        suite.direct_test_case_count = direct_counts.get(suite.id, 0)
+        suite.total_test_case_count = total_counts[suite.id]
+    return suites
 
 
 def get_suite(db: Session, suite_id: int) -> TestSuite:
-    suite = db.get(TestSuite, suite_id)
+    suite = (
+        db.query(TestSuite)
+        .options(selectinload(TestSuite.group_memberships))
+        .filter(TestSuite.id == suite_id)
+        .first()
+    )
     if suite is None:
         raise not_found("Test suite")
     return suite
 
 
-def _validate_parent(db: Session, project_id: int, parent_suite_id: int | None) -> TestSuite | None:
+def _validate_parent(db: Session, parent_suite_id: int | None) -> TestSuite | None:
     if parent_suite_id is None:
         return None
-    parent = get_suite(db, parent_suite_id)
-    if parent.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parent suite patří do jiného projektu.")
-    return parent
+    return get_suite(db, parent_suite_id)
 
 
 def _path_for(payload: TestSuiteCreate | TestSuiteUpdate, parent: TestSuite | None, current: TestSuite | None = None) -> str:
@@ -62,35 +79,42 @@ def _update_descendant_paths(db: Session, suite: TestSuite) -> None:
         _update_descendant_paths(db, child)
 
 
-def create_suite(db: Session, project_id: int, payload: TestSuiteCreate, current_user: User) -> TestSuite:
-    get_project_or_404(db, project_id)
-    parent = _validate_parent(db, project_id, payload.parent_suite_id)
-    data = payload.model_dump()
+def create_suite(db: Session, payload: TestSuiteCreate, current_user: User) -> TestSuite:
+    parent = _validate_parent(db, payload.parent_suite_id)
+    data = payload.model_dump(exclude={"group_ids"})
     data["path"] = _path_for(payload, parent)
     data["level"] = parent.level + 1 if parent else data["level"]
-    suite = TestSuite(**data, project_id=project_id, created_by=current_user.id)
+    suite = TestSuite(**data, created_by=current_user.id)
     db.add(suite)
+    db.flush()
+    if payload.group_ids:
+        return group_service.set_suite_groups(db, suite.id, payload.group_ids)
     db.commit()
-    db.refresh(suite)
-    return suite
+    return get_suite(db, suite.id)
 
 
 def update_suite(db: Session, suite_id: int, payload: TestSuiteUpdate) -> TestSuite:
     suite = get_suite(db, suite_id)
-    parent_id = payload.parent_suite_id if payload.parent_suite_id is not None else suite.parent_suite_id
+    parent_id = (
+        payload.parent_suite_id
+        if "parent_suite_id" in payload.model_fields_set
+        else suite.parent_suite_id
+    )
     if parent_id == suite.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Suite nemůže být vlastním rodičem.")
     if parent_id is not None and _is_descendant(db, suite, parent_id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Suite nelze přesunout pod vlastní podstrom.")
-    parent = _validate_parent(db, suite.project_id, parent_id)
-    apply_updates(suite, payload)
+    parent = _validate_parent(db, parent_id)
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"group_ids"}).items():
+        setattr(suite, field, value)
     suite.path = _path_for(payload, parent, suite)
-    if payload.parent_suite_id is not None:
+    if "parent_suite_id" in payload.model_fields_set:
         suite.level = parent.level + 1 if parent else 0
     _update_descendant_paths(db, suite)
+    if "group_ids" in payload.model_fields_set:
+        return group_service.set_suite_groups(db, suite.id, payload.group_ids or [])
     db.commit()
-    db.refresh(suite)
-    return suite
+    return get_suite(db, suite.id)
 
 
 def delete_suite(db: Session, suite_id: int) -> None:
@@ -104,16 +128,15 @@ def delete_suite(db: Session, suite_id: int) -> None:
     db.commit()
 
 
-def search_suites(db: Session, project_id: int, query: str) -> list[TestSuite]:
-    get_project_or_404(db, project_id)
-    if len(query.strip()) < 2:
+def search_suites(db: Session, query: str) -> list[TestSuite]:
+    normalized_query = query.strip().casefold()
+    if len(normalized_query) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vyhledávání vyžaduje alespoň 2 znaky.")
-    return (
-        db.query(TestSuite)
-        .filter(TestSuite.project_id == project_id, TestSuite.name.ilike(f"%{query.strip()}%"))
-        .order_by(TestSuite.path)
-        .all()
-    )
+    return [
+        suite
+        for suite in list_suites(db)
+        if normalized_query in suite.name.casefold() or normalized_query in suite.path.casefold()
+    ]
 
 
 def get_children(db: Session, suite_id: int) -> list[TestSuite]:
@@ -126,8 +149,8 @@ def get_children(db: Session, suite_id: int) -> list[TestSuite]:
     )
 
 
-def get_suite_tree(db: Session, project_id: int) -> list[dict]:
-    suites = list_suites(db, project_id)
+def get_suite_tree(db: Session) -> list[dict]:
+    suites = list_suites(db)
     nodes = {suite.id: {"suite": suite, "children": []} for suite in suites}
     roots: list[dict] = []
     for suite in suites:
@@ -141,7 +164,6 @@ def get_suite_tree(db: Session, project_id: int) -> list[dict]:
         suite = node["suite"]
         data = {
             "id": suite.id,
-            "project_id": suite.project_id,
             "parent_suite_id": suite.parent_suite_id,
             "name": suite.name,
             "description": suite.description,
@@ -152,6 +174,9 @@ def get_suite_tree(db: Session, project_id: int) -> list[dict]:
             "created_by": suite.created_by,
             "created_at": suite.created_at,
             "updated_at": suite.updated_at,
+            "direct_test_case_count": suite.direct_test_case_count,
+            "total_test_case_count": suite.total_test_case_count,
+            "group_ids": suite.group_ids,
             "children": [serialize(child) for child in node["children"]],
         }
         return data

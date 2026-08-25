@@ -1,4 +1,3 @@
-export type Priority = "low" | "medium" | "high" | "critical";
 export type TestCaseStatus = "draft" | "ready" | "deprecated";
 export type TestRunStatus = "open" | "in_progress" | "completed";
 export type Result = "not_run" | "passed" | "failed" | "blocked" | "skipped";
@@ -25,7 +24,6 @@ export type TestCase = {
   code: string;
   title: string;
   suiteId: number;
-  priority: Priority;
   status: TestCaseStatus;
   owner: string;
   preconditions: string;
@@ -65,7 +63,6 @@ export const testCases: TestCase[] = [
     code: "ESHOP-TC-001",
     title: "Přihlášení platného uživatele",
     suiteId: 2,
-    priority: "high",
     status: "ready",
     owner: "Jana Nováková",
     preconditions: "Uživatel má aktivní účet a dostupné testovací prostředí.",
@@ -80,7 +77,6 @@ export const testCases: TestCase[] = [
     code: "ESHOP-TC-002",
     title: "Odmítnutí neplatného hesla",
     suiteId: 2,
-    priority: "medium",
     status: "ready",
     owner: "Petr Svoboda",
     preconditions: "Uživatel existuje v databázi.",
@@ -94,7 +90,6 @@ export const testCases: TestCase[] = [
     code: "ESHOP-TC-003",
     title: "Dokončení objednávky kartou",
     suiteId: 3,
-    priority: "critical",
     status: "ready",
     owner: "Lucie Dvořáková",
     preconditions: "Košík obsahuje produkt skladem a platební brána je v test módu.",
@@ -110,7 +105,6 @@ export const testCases: TestCase[] = [
     code: "ESHOP-TC-004",
     title: "Zobrazení historie objednávek",
     suiteId: 4,
-    priority: "low",
     status: "draft",
     owner: "Jana Nováková",
     preconditions: "Uživatel má alespoň jednu dokončenou objednávku.",
@@ -162,13 +156,9 @@ export const testRuns: TestRun[] = [
   },
 ];
 
-export const defects = [
-  { id: 401, title: "Login vrací 500 při prázdném hesle", status: "open", priority: "high", run: "Smoke test E-shop" },
-  { id: 402, title: "Checkout neuloží dodací poznámku", status: "retest", priority: "medium", run: "Hotfix checkout" },
-];
 
 export function suiteName(suiteId: number) {
-  return suites.find((suite) => suite.id === suiteId)?.name ?? "Bez suity";
+  return suites.find((suite) => suite.id === suiteId)?.name ?? "Počátek vesmíru";
 }
 
 export function resultLabel(result: Result) {

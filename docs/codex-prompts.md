@@ -29,7 +29,6 @@ Požadavky:
    - TestSuitesPage
    - TestCasesPage
    - TestRunsPage
-   - DefectsPage
 9. Přidej základní routing ve frontendu.
 10. Nepřidávej složitou business logiku zatím.
 11. Po dokončení vypiš, jak projekt spustit.
@@ -48,7 +47,6 @@ Požadavky:
    - TestStep
    - TestRun
    - TestRunCase
-   - Defect
 3. Nastav vztahy mezi modely.
 4. Přidej created_at a updated_at.
 5. Přidej Alembic migrace.
@@ -82,7 +80,6 @@ Priorita MVP:
 7. Test Runs CRUD
 8. Přidání test cases do test runu
 9. Execution endpoint pro uložení výsledku test_run_case
-10. Defects CRUD
 11. Dashboard endpoint
 
 Pravidla:
@@ -110,11 +107,9 @@ Požadavky:
    - Test Suity
    - Test Cases
    - Test Runs
-   - Defects
    - Reporty
    - Nastavení
 5. Dashboard stránka:
-   - KPI karty: Počet test cases, Aktivní test runy, Pass rate, Otevřené defecty
    - tabulka posledních test runů
    - panel výsledků testů
    - rychlé akce
@@ -125,7 +120,7 @@ Požadavky:
    - formulář pro vytvoření/editaci test suite
 7. Test Cases stránka:
    - tabulka test cases
-   - filtry podle priority, status, suite
+   - filtry podle statusu a suite
    - tlačítko Nový test case
 8. Test Case detail:
    - metadata
@@ -159,7 +154,6 @@ Požadavky:
    - createTestCase
    - getTestRuns
    - updateTestRunCaseResult
-   - createDefect
 4. Nahraď mock data reálnými daty z backendu.
 5. Přidej loading a error stavy.
 6. Zachovej jednoduchý a čistý kód.
@@ -179,16 +173,13 @@ Scénář:
    - blocked
    - skipped
 6. Přidá komentář.
-7. U failed výsledku může rovnou založit defect.
 8. Dashboard se po uložení výsledku aktualizuje.
 
 Backend:
 - endpoint PUT /api/test-run-cases/{id}/result
-- pokud result = failed a je vyplněný defect payload, vytvoř defect
 - aktualizuj executed_by a executed_at
 
 Frontend:
 - execution detail stránka
 - tlačítka výsledků
 - komentářové pole
-- modal/form pro defect u failed

@@ -1,7 +1,5 @@
 from app.schemas.auth import LoginRequest, TokenResponse, UserRead
 from app.schemas.dashboard import DashboardRead
-from app.schemas.defect import DefectCreate, DefectRead, DefectUpdate
-from app.schemas.project import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
 from app.schemas.test_case import (
     TestCaseCreate,
     TestCaseRead,

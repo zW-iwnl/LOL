@@ -9,14 +9,12 @@ def auth_headers(client: TestClient) -> dict[str, str]:
 
 def create_test_case(client: TestClient, headers: dict[str, str], code: str = "TC-RUN-1") -> dict:
     response = client.post(
-        "/api/projects/1/test-cases",
+        "/api/test-cases",
         headers=headers,
         json={
             "code": code,
             "title": "Run workflow case",
-            "priority": "high",
             "status": "ready",
-            "type": "manual",
             "automated": False,
             "steps": [{"step_order": 1, "action": "Open page", "expected_result": "Page is visible"}],
         },
@@ -27,7 +25,7 @@ def create_test_case(client: TestClient, headers: dict[str, str], code: str = "T
 
 def create_test_run(client: TestClient, headers: dict[str, str]) -> dict:
     response = client.post(
-        "/api/projects/1/test-runs",
+        "/api/test-runs",
         headers=headers,
         json={"name": "Regression", "environment": "TEST", "status": "open"},
     )

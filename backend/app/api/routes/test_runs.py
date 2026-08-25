@@ -4,6 +4,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.schemas.common import TestRunStatus
 from app.schemas.test_run import (
     TestRunAddCasesRequest,
+    TestRunAttemptRead,
     TestRunCaseRead,
     TestRunCaseUpdate,
     TestRunCreate,
@@ -11,16 +12,18 @@ from app.schemas.test_run import (
     TestRunListItem,
     TestRunRead,
     TestRunUpdate,
+    TestRunStepResultRead,
     UpdateResultRequest,
+    UpdateStepResultRequest,
 )
+from app.services import test_run_steps as step_result_service
 from app.services import test_runs as test_run_service
 
 router = APIRouter(tags=["Test Runs", "Execution"])
 
 
-@router.get("/projects/{project_id}/test-runs", response_model=list[TestRunListItem])
+@router.get("/test-runs", response_model=list[TestRunListItem])
 def list_test_runs(
-    project_id: int,
     db: DbSession,
     q: str | None = Query(default=None, min_length=1),
     status_filter: TestRunStatus | None = Query(default=None, alias="status"),
@@ -30,7 +33,6 @@ def list_test_runs(
 ):
     return test_run_service.list_test_runs(
         db,
-        project_id,
         q=q,
         status_filter=status_filter,
         environment=environment,
@@ -39,9 +41,9 @@ def list_test_runs(
     )
 
 
-@router.post("/projects/{project_id}/test-runs", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
-def create_test_run(project_id: int, payload: TestRunCreate, db: DbSession, current_user: CurrentUser):
-    return test_run_service.create_test_run(db, project_id, payload, current_user)
+@router.post("/test-runs", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
+def create_test_run(payload: TestRunCreate, db: DbSession, current_user: CurrentUser):
+    return test_run_service.create_test_run(db, payload, current_user)
 
 
 @router.get("/test-runs/{test_run_id}", response_model=TestRunRead)
@@ -77,10 +79,79 @@ def remove_run_case(test_run_case_id: int, db: DbSession) -> Response:
 
 
 @router.get("/test-runs/{test_run_id}/execution", response_model=TestRunExecutionRead)
-def get_execution(test_run_id: int, db: DbSession):
-    return test_run_service.get_execution(db, test_run_id)
+def get_execution(test_run_id: int, db: DbSession, attempt_id: int | None = Query(default=None)):
+    return test_run_service.get_execution(db, test_run_id, attempt_id=attempt_id)
+
+
+@router.get("/test-runs/{test_run_id}/attempts", response_model=list[TestRunAttemptRead])
+def list_attempts(test_run_id: int, db: DbSession):
+    return test_run_service.list_attempts(db, test_run_id)
+
+
+@router.post("/test-runs/{test_run_id}/reruns", response_model=TestRunExecutionRead, status_code=status.HTTP_201_CREATED)
+def create_rerun(test_run_id: int, db: DbSession, current_user: CurrentUser):
+    return test_run_service.create_rerun(db, test_run_id, current_user)
+
+
+@router.post(
+    "/test-run-case-attempts/{case_attempt_id}/reruns",
+    response_model=TestRunExecutionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_case_rerun(case_attempt_id: int, db: DbSession, current_user: CurrentUser):
+    return test_run_service.create_case_rerun(db, case_attempt_id, current_user)
 
 
 @router.put("/test-run-cases/{test_run_case_id}/result", response_model=TestRunCaseRead)
-def update_result(test_run_case_id: int, payload: UpdateResultRequest, db: DbSession, current_user: CurrentUser):
-    return test_run_service.update_result(db, test_run_case_id, payload, current_user)
+def update_latest_result(
+    test_run_case_id: int,
+    payload: UpdateResultRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    return test_run_service.update_latest_result(db, test_run_case_id, payload, current_user)
+
+
+@router.put("/test-run-case-attempts/{case_attempt_id}/result", response_model=TestRunCaseRead)
+def update_result(case_attempt_id: int, payload: UpdateResultRequest, db: DbSession, current_user: CurrentUser):
+    return test_run_service.update_result(db, case_attempt_id, payload, current_user)
+
+
+@router.put(
+    "/test-run-cases/{test_run_case_id}/steps/{test_step_id}/result",
+    response_model=TestRunStepResultRead,
+)
+def update_latest_step_result(
+    test_run_case_id: int,
+    test_step_id: int,
+    payload: UpdateStepResultRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    return step_result_service.update_latest_step_result(
+        db,
+        test_run_case_id,
+        test_step_id,
+        payload,
+        current_user,
+    )
+
+
+@router.put(
+    "/test-run-case-attempts/{case_attempt_id}/steps/{test_step_id}/result",
+    response_model=TestRunStepResultRead,
+)
+def update_step_result(
+    case_attempt_id: int,
+    test_step_id: int,
+    payload: UpdateStepResultRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    return step_result_service.update_step_result(
+        db,
+        case_attempt_id,
+        test_step_id,
+        payload,
+        current_user,
+    )

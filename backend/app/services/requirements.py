@@ -1,8 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Defect, Requirement, TestCase, TestRunCase, User
-from app.schemas.common import DefectStatus
+from app.models import Requirement, TestCase, TestRunCase, User
 from app.schemas.requirement import (
     RequirementCreate,
     RequirementLinkTestCasesRequest,
@@ -10,17 +9,13 @@ from app.schemas.requirement import (
     TraceabilityRow,
     TraceabilityTestCase,
 )
-from app.services.common import apply_updates, get_project_or_404, not_found
-
-OPEN_DEFECT_STATUSES: set[DefectStatus] = {"open", "in_progress", "fixed", "retest"}
+from app.services.common import apply_updates, not_found
 
 
-def list_requirements(db: Session, project_id: int) -> list[Requirement]:
-    get_project_or_404(db, project_id)
+def list_requirements(db: Session) -> list[Requirement]:
     return (
         db.query(Requirement)
         .options(selectinload(Requirement.test_cases).selectinload(TestCase.steps))
-        .filter(Requirement.project_id == project_id)
         .order_by(Requirement.code)
         .all()
     )
@@ -38,13 +33,12 @@ def get_requirement(db: Session, requirement_id: int) -> Requirement:
     return requirement
 
 
-def create_requirement(db: Session, project_id: int, payload: RequirementCreate, current_user: User) -> Requirement:
-    get_project_or_404(db, project_id)
-    if db.query(Requirement).filter(Requirement.project_id == project_id, Requirement.code == payload.code).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód requirementu už v projektu existuje.")
+def create_requirement(db: Session, payload: RequirementCreate, current_user: User) -> Requirement:
+    if db.query(Requirement).filter(Requirement.code == payload.code).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód requirementu už existuje.")
 
     data = payload.model_dump(exclude={"test_case_ids"})
-    requirement = Requirement(**data, project_id=project_id, created_by=current_user.id)
+    requirement = Requirement(**data, created_by=current_user.id)
     db.add(requirement)
     db.flush()
     if payload.test_case_ids:
@@ -59,14 +53,13 @@ def update_requirement(db: Session, requirement_id: int, payload: RequirementUpd
         existing = (
             db.query(Requirement)
             .filter(
-                Requirement.project_id == requirement.project_id,
                 Requirement.code == payload.code,
                 Requirement.id != requirement_id,
             )
             .first()
         )
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód requirementu už v projektu existuje.")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód requirementu už existuje.")
     apply_updates(requirement, payload)
     db.commit()
     return get_requirement(db, requirement.id)
@@ -94,14 +87,13 @@ def unlink_test_case(db: Session, requirement_id: int, test_case_id: int) -> Non
     db.commit()
 
 
-def get_traceability_matrix(db: Session, project_id: int) -> list[TraceabilityRow]:
-    requirements = list_requirements(db, project_id)
+def get_traceability_matrix(db: Session) -> list[TraceabilityRow]:
+    requirements = list_requirements(db)
     rows: list[TraceabilityRow] = []
     for requirement in requirements:
         test_case_ids = [test_case.id for test_case in requirement.test_cases]
         latest_run_cases = _latest_run_cases_by_test_case(db, test_case_ids)
         latest_run_case = _latest_run_case(latest_run_cases)
-        open_defects = _open_defects(db, project_id, test_case_ids)
         tested_case_count = len(latest_run_cases)
         failed_case_count = sum(1 for run_case in latest_run_cases.values() if run_case.result == "failed")
         blocked_case_count = sum(1 for run_case in latest_run_cases.values() if run_case.result == "blocked")
@@ -118,7 +110,6 @@ def get_traceability_matrix(db: Session, project_id: int) -> list[TraceabilityRo
                         code=test_case.code,
                         title=test_case.title,
                         status=test_case.status,
-                        priority=test_case.priority,
                     )
                     for test_case in requirement.test_cases
                 ],
@@ -128,15 +119,12 @@ def get_traceability_matrix(db: Session, project_id: int) -> list[TraceabilityRo
                     tested_case_count=tested_case_count,
                     failed_case_count=failed_case_count,
                     blocked_case_count=blocked_case_count,
-                    open_defect_count=len(open_defects),
                 ),
                 tested_case_count=tested_case_count,
                 failed_case_count=failed_case_count,
                 blocked_case_count=blocked_case_count,
-                open_defect_count=len(open_defects),
                 latest_result=latest_run_case.result if latest_run_case else None,
                 latest_executed_at=latest_run_case.executed_at if latest_run_case else None,
-                open_defects=open_defects,
             )
         )
     return rows
@@ -145,7 +133,7 @@ def get_traceability_matrix(db: Session, project_id: int) -> list[TraceabilityRo
 def _link_test_cases(db: Session, requirement: Requirement, test_case_ids: list[int]) -> None:
     test_cases = (
         db.query(TestCase)
-        .filter(TestCase.project_id == requirement.project_id, TestCase.id.in_(test_case_ids))
+        .filter(TestCase.id.in_(test_case_ids))
         .all()
     )
     found_ids = {test_case.id for test_case in test_cases}
@@ -153,7 +141,7 @@ def _link_test_cases(db: Session, requirement: Requirement, test_case_ids: list[
     if missing_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Test cases neexistují v projektu: {missing_ids}",
+            detail=f"Test cases neexistují: {missing_ids}",
         )
 
     existing_ids = {test_case.id for test_case in requirement.test_cases}
@@ -193,30 +181,11 @@ def _traceability_risk_status(
     tested_case_count: int,
     failed_case_count: int,
     blocked_case_count: int,
-    open_defect_count: int,
 ) -> str:
     if total_case_count == 0:
         return "missing_tests"
-    if open_defect_count > 0:
-        return "defect_risk"
     if failed_case_count > 0 or blocked_case_count > 0:
         return "failing"
     if tested_case_count < total_case_count:
         return "partial"
     return "verified"
-
-
-def _open_defects(db: Session, project_id: int, test_case_ids: list[int]) -> list[Defect]:
-    if not test_case_ids:
-        return []
-    return (
-        db.query(Defect)
-        .join(TestRunCase, Defect.test_run_case_id == TestRunCase.id)
-        .filter(
-            Defect.project_id == project_id,
-            TestRunCase.test_case_id.in_(test_case_ids),
-            Defect.status.in_(OPEN_DEFECT_STATUSES),
-        )
-        .order_by(Defect.created_at.desc())
-        .all()
-    )

@@ -4,7 +4,7 @@ export type GetTestCasesParams = {
   suiteId?: number;
 };
 
-export function getTestCases(projectId: number, params: GetTestCasesParams = {}) {
+export function getTestCases(params: GetTestCasesParams = {}) {
   const query = params.suiteId ? `?suite_id=${params.suiteId}` : "";
-  return request<TestCase[]>(`/projects/${projectId}/test-cases${query}`);
+  return request<TestCase[]>(`/test-cases${query}`);
 }

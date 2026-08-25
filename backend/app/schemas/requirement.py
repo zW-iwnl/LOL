@@ -4,11 +4,10 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.common import Priority, TestRunCaseResult, TimestampFields
-from app.schemas.defect import DefectRead
 from app.schemas.test_case import TestCaseRead
 
 RequirementStatus = Literal["draft", "approved", "deprecated"]
-TraceabilityRiskStatus = Literal["missing_tests", "defect_risk", "failing", "partial", "verified"]
+TraceabilityRiskStatus = Literal["missing_tests", "failing", "partial", "verified"]
 
 
 class RequirementBase(BaseModel):
@@ -33,7 +32,6 @@ class RequirementUpdate(BaseModel):
 
 class RequirementRead(RequirementBase, TimestampFields):
     id: int
-    project_id: int
     created_by: int
     test_cases: list[TestCaseRead] = []
 
@@ -47,7 +45,6 @@ class TraceabilityTestCase(BaseModel):
     code: str
     title: str
     status: str
-    priority: str
 
 
 class TraceabilityRow(BaseModel):
@@ -62,7 +59,5 @@ class TraceabilityRow(BaseModel):
     tested_case_count: int
     failed_case_count: int
     blocked_case_count: int
-    open_defect_count: int
     latest_result: TestRunCaseResult | None
     latest_executed_at: datetime | None
-    open_defects: list[DefectRead]

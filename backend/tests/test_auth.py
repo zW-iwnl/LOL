@@ -30,19 +30,19 @@ def test_login_and_me(client: TestClient) -> None:
     assert response.json()["email"] == "admin@testmanager.cz"
 
 
-def test_projects_are_protected(client: TestClient) -> None:
-    response = client.get("/api/projects")
+def test_repository_is_protected(client: TestClient) -> None:
+    response = client.get("/api/test-suites")
 
     assert response.status_code == 401
 
 
-def test_authenticated_user_can_list_projects(client: TestClient) -> None:
+def test_authenticated_user_can_list_test_suites(client: TestClient) -> None:
     token = login(client)
 
-    response = client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
+    response = client.get("/api/test-suites", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
-    assert response.json()[0]["code"] == "ESHOP"
+    assert response.json() == []
 
 
 def test_authenticated_user_can_list_all_test_cases(client: TestClient) -> None:

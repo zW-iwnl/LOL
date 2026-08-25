@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useActiveProject } from "../projects/ActiveProjectContext";
 
 type ApiState<T> = {
   data: T | null;
@@ -32,16 +31,6 @@ export function useApiResource<T>(loader: () => Promise<T>, deps: unknown[] = []
   }, deps);
 
   return state;
-}
-
-export function useCurrentProject() {
-  const activeProject = useActiveProject();
-
-  return {
-    project: activeProject.activeProject,
-    loading: activeProject.loading,
-    error: activeProject.error,
-  };
 }
 
 export function LoadingState() {

@@ -26,12 +26,10 @@ npm run test:smoke
 ## Smoke scénáře
 
 - Login funguje a přesměruje na Dashboard.
-- Hlavní navigace otevře Projects, Test Cases, Test Runs a Defects.
 - Test Cases mají viditelný lokální projektový kontext a akci pro nový test case.
 - Test Runs mají lokální projektový kontext a create wizard.
 - Test Run wizard validuje povinný název.
 - Test Run wizard nepustí vytvoření bez vybraného test case.
-- Defects mají lokální projektový kontext a akci pro nový defect.
 - Test během průchodu hlídá console/page errors.
 
 ## Ruční workflow checklist
@@ -73,6 +71,4 @@ Doporučení:
 
 1. Login -> Test Cases -> nový test case.
 2. Test Runs -> wizard -> výběr test cases -> přiřazení.
-3. Execution -> Passed/Failed -> defect flow.
-4. Defects -> workflow akce -> audit historie.
 5. Requirements -> traceability matrix po doplnění endpointu.

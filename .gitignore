@@ -13,3 +13,8 @@ frontend/test-results/
 backend/.pytest_cache/
 
 backups/
+
+# Local development and editor artifacts
+*.db
+*.orig
+*:Zone.Identifier

@@ -7,17 +7,14 @@ Test Manager - navod pro testery
   - Heslo: admin123
 
 2. Zasada cislo jedna
-- Pred praci vzdy zkontroluj, ze jsi ve spravnem projektu.
-- Vetsina stranek ma nahore vyber projektu. Bez spravneho projektu budou data spatne nebo prazdna.
+- Vsechny suity, test cases, requirements a test runy jsou v jednom spolecnem repository.
 
 3. Kde co najdes
 - Dashboard: rychly prehled stavu testovani.
-- Projekty: seznam projektu.
 - Test Suity: strom testovacich oblasti.
 - Test Cases: repository test cases.
 - Test Plans: planovani testovacich cyklu.
 - Test Runs: konkretni behy testovani.
-- Defecty: evidence chyb.
 - Requirements: poziadavky a traceability.
 
 4. Test Cases
@@ -29,9 +26,7 @@ Test Manager - navod pro testery
 - Nahoře jsou filtry:
   - hledani
   - suite
-  - priorita
   - status
-  - typ
 - Novy test case vytvoris pres tlacitko Novy test case.
 - Doporučené statusy:
   - draft = rozpracovany
@@ -64,28 +59,9 @@ Test Manager - navod pro testery
 - Pro rychly pruchod pouzij:
   - Rychle ulozit Passed
   - Dalsi neprovedeny
-- Pokud je vysledek Failed:
-  - dopln komentar
-  - po uloženi se nabidne zalozeni defectu
-- U failed bez defectu pouzij tlacitko Ulozit bez defectu jen v pripade, ze je to vedomy krok.
+- Pokud je vysledek Failed, dopln komentar s popisem chyby a okolnostmi selhani.
 
-7. Defecty
-- Defect vznikne z failed testu nebo se vytvari rucne.
-- Doporuceny workflow:
-  - open
-  - in_progress
-  - fixed
-  - retest
-  - closed
-- V detailu defectu pouzivej workflow akce:
-  - Zahajit reseni
-  - Oznacit fixed
-  - Poslat na retest
-  - Zavrit
-  - Zamietnout
-  - Znovu otevrit
-
-8. Test Plans
+7. Test Plans
 - Test Plan je nadrazene planovani vetsiho testovaciho cyklu.
 - Je vhodny pro release, sprint nebo UAT.
 - V platu muzes mit vice test runu.
@@ -96,28 +72,23 @@ Test Manager - navod pro testery
   - pass rate
 - Z platu lze vytvorit novy run pres Create run from plan.
 
-9. Jak pracovat kazdy den
+8. Jak pracovat kazdy den
 1. Otevri Test Runs.
-2. Vyber spravny projekt.
-3. Spust execution.
-4. Prochazej test cases postupne.
-5. U kazdeho uloz vysledek.
-6. Failed testy prevadej na defecty.
-7. Na konci zkontroluj, ze run nema neprovedene polozky.
-8. Zkontroluj otevrene defecty.
+2. Spust execution.
+3. Prochazej test cases postupne.
+4. U kazdeho uloz vysledek.
+5. Na konci zkontroluj, ze run nema neprovedene polozky.
 
-10. Pravidla pro dobre testovani
+9. Pravidla pro dobre testovani
 - Jeden test case ma overovat jednu hlavni vec.
 - Krok musi byt jasny a reprodukovatelny.
 - Komentar u failed testu je povinny v praxi.
 - Blocked pouzivej jen kdyz test opravdu nejde provest.
 - Skipped pouzivej jen kdyz byl test vedome vynechan.
-- Defect zapis tak, aby ho dokazal reprodukovat i vyvojar.
 
-11. Co hlidat
-- Spravny projekt.
+10. Co hlidat
 - Spravnou suite.
 - Spravne priřazeni testera.
 - Spravnou verzi runu.
-- U failed testu defect nebo alespon komentar.
+- U failed testu vzdy dopln komentar s reprodukčními informacemi.
 - Archivovane runy uz nemeniš.

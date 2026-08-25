@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.test_case import TestCaseCreate, TestCaseRead, TestCaseUpdate, TestStepCreate, TestStepRead, TestStepUpdate
@@ -7,19 +7,26 @@ from app.services import test_cases as test_case_service
 router = APIRouter(tags=["Test Cases"])
 
 
-@router.get("/projects/{project_id}/test-cases", response_model=list[TestCaseRead])
-def list_test_cases(project_id: int, db: DbSession, suite_id: int | None = None):
-    return test_case_service.list_test_cases(db, project_id=project_id, suite_id=suite_id)
-
-
 @router.get("/test-cases", response_model=list[TestCaseRead])
-def list_all_test_cases(db: DbSession, suite_id: int | None = None):
-    return test_case_service.list_test_cases(db, suite_id=suite_id)
+def list_all_test_cases(
+    db: DbSession,
+    suite_id: int | None = None,
+    business_area_id: list[int] | None = Query(default=None),
+    application_domain_id: list[int] | None = Query(default=None),
+    object_type_id: list[int] | None = Query(default=None),
+):
+    return test_case_service.list_test_cases(
+        db,
+        suite_id=suite_id,
+        business_area_ids=business_area_id,
+        application_domain_ids=application_domain_id,
+        object_type_ids=object_type_id,
+    )
 
 
-@router.post("/projects/{project_id}/test-cases", response_model=TestCaseRead, status_code=status.HTTP_201_CREATED)
-def create_test_case(project_id: int, payload: TestCaseCreate, db: DbSession, current_user: CurrentUser):
-    return test_case_service.create_test_case(db, project_id, payload, current_user)
+@router.post("/test-cases", response_model=TestCaseRead, status_code=status.HTTP_201_CREATED)
+def create_test_case(payload: TestCaseCreate, db: DbSession, current_user: CurrentUser):
+    return test_case_service.create_test_case(db, payload, current_user)
 
 
 @router.get("/test-cases/{test_case_id}", response_model=TestCaseRead)

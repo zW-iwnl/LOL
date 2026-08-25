@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Projekt
-Vyvíjíme interní webovou aplikaci "Test Manager" pro správu test cases, test suites, test runs, výsledků testování a defectů.
+Vyvíjíme interní webovou aplikaci "Test Manager" pro správu test cases, test suites, test runs, výsledků testování.
 
 Aplikace má nahradit základní funkce JIRA/Xray/Zephyr pro testovací oddělení.
 
@@ -34,34 +34,30 @@ Kód, názvy proměnných, API endpointy a databázové názvy budou anglicky.
 ## MVP funkce
 První verze musí obsahovat:
 1. Login
-2. Projekty
-3. Test Suites
-4. Test Cases
-5. Test Steps
-6. Test Runs
-7. Test Run Execution
-8. Výsledky: passed, failed, blocked, skipped
-9. Defects
-10. Dashboard
+2. Test Suites
+3. Test Cases
+4. Test Steps
+5. Test Runs
+6. Test Run Execution
+7. Výsledky: passed, failed, blocked, skipped
+8. Dashboard
 
 ## Hlavní entity
 - User
-- Project
 - TestSuite
 - TestCase
 - TestStep
 - TestRun
 - TestRunCase
-- Defect
 
 ## Databázová pravidla
 - Každá hlavní tabulka má id, created_at, updated_at.
+- Aplikace používá jedno globální repository bez projektového dělení.
 - TestSuite má parent_suite_id pro stromovou strukturu.
 - TestSuite má path pro rychlé hledání podstromu.
-- TestCase patří do Project a volitelně do TestSuite.
+- TestCase volitelně patří do TestSuite.
 - TestRun obsahuje sadu TestRunCase položek.
 - TestRunCase drží výsledek konkrétního provedení test case.
-- Defect může být navázán na TestRunCase.
 
 ## Status hodnoty
 TestCase status:
@@ -82,15 +78,8 @@ TestRunCase result:
 - blocked
 - skipped
 
-Defect status:
-- open
-- in_progress
-- fixed
-- retest
-- closed
-- rejected
 
-Priority:
+Requirement priority:
 - low
 - medium
 - high

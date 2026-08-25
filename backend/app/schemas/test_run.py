@@ -2,8 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import TestRunCaseResult, TestRunStatus, TimestampFields
-from app.schemas.defect import DefectCreate
+from app.schemas.common import TestRunCaseResult, TestRunStatus, TestRunStepResultValue, TimestampFields
 from app.schemas.test_case import TestCaseRead
 
 
@@ -35,6 +34,34 @@ class TestRunUpdate(BaseModel):
     finished_at: datetime | None = None
 
 
+class TestRunStepResultRead(TimestampFields):
+    id: int
+    test_run_case_id: int
+    test_run_case_attempt_id: int
+    test_step_id: int
+    step_order: int
+    result: TestRunStepResultValue
+    executed_by: int | None
+    executed_at: datetime | None
+
+
+class UpdateStepResultRequest(BaseModel):
+    result: TestRunStepResultValue
+
+
+class TestRunCaseAttemptHistoryRead(TimestampFields):
+    id: int
+    test_run_attempt_id: int
+    test_run_attempt_number: int
+    test_run_case_id: int
+    attempt_number: int
+    result: TestRunCaseResult
+    comment: str | None
+    executed_by: int | None
+    executed_at: datetime | None
+    step_results: list[TestRunStepResultRead] = []
+
+
 class TestRunCaseRead(TimestampFields):
     id: int
     test_run_id: int
@@ -44,22 +71,22 @@ class TestRunCaseRead(TimestampFields):
     comment: str | None
     executed_by: int | None
     executed_at: datetime | None
-    defect_count: int
     test_case_version: int
     test_case_snapshot: dict | None
+    step_results: list[TestRunStepResultRead] = []
 
 
 class TestRunCaseExecutionRead(TestRunCaseRead):
+    case_attempt_id: int
+    case_attempts: list[TestRunCaseAttemptHistoryRead] = []
     code: str
     title: str
-    priority: str
     suite_name: str | None = None
     test_case: TestCaseRead
 
 
 class TestRunRead(TestRunBase, TimestampFields):
     id: int
-    project_id: int
     created_by: int
     test_run_cases: list[TestRunCaseRead] = []
 
@@ -83,8 +110,21 @@ class TestRunCaseUpdate(BaseModel):
 class UpdateResultRequest(BaseModel):
     result: TestRunCaseResult
     comment: str | None = None
-    defect: DefectCreate | None = None
+
+
+class TestRunAttemptRead(TimestampFields):
+    id: int
+    test_run_id: int
+    attempt_number: int
+    status: TestRunStatus
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_by: int
+    last_test_run_case_id: int | None
+    last_step_id: int | None
 
 
 class TestRunExecutionRead(TestRunRead):
+    attempts: list[TestRunAttemptRead] = []
+    selected_attempt_id: int
     test_run_cases: list[TestRunCaseExecutionRead] = []

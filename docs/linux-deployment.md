@@ -170,7 +170,6 @@ V prohlížeči ověř:
 2. vytvoření projektu;
 3. vytvoření suite, test case a kroků;
 4. vytvoření test runu a uložení výsledku;
-5. vytvoření defectu;
 6. odhlášení a opětovné přihlášení.
 
 ## 9. Zálohy

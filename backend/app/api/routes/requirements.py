@@ -13,14 +13,14 @@ from app.services import requirements as requirement_service
 router = APIRouter(tags=["Requirements", "Traceability"])
 
 
-@router.get("/projects/{project_id}/requirements", response_model=list[RequirementRead])
-def list_requirements(project_id: int, db: DbSession):
-    return requirement_service.list_requirements(db, project_id)
+@router.get("/requirements", response_model=list[RequirementRead])
+def list_requirements(db: DbSession):
+    return requirement_service.list_requirements(db)
 
 
-@router.post("/projects/{project_id}/requirements", response_model=RequirementRead, status_code=status.HTTP_201_CREATED)
-def create_requirement(project_id: int, payload: RequirementCreate, db: DbSession, current_user: CurrentUser):
-    return requirement_service.create_requirement(db, project_id, payload, current_user)
+@router.post("/requirements", response_model=RequirementRead, status_code=status.HTTP_201_CREATED)
+def create_requirement(payload: RequirementCreate, db: DbSession, current_user: CurrentUser):
+    return requirement_service.create_requirement(db, payload, current_user)
 
 
 @router.get("/requirements/{requirement_id}", response_model=RequirementRead)
@@ -50,6 +50,6 @@ def unlink_test_case(requirement_id: int, test_case_id: int, db: DbSession) -> R
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/projects/{project_id}/traceability", response_model=list[TraceabilityRow])
-def get_traceability_matrix(project_id: int, db: DbSession):
-    return requirement_service.get_traceability_matrix(db, project_id)
+@router.get("/traceability", response_model=list[TraceabilityRow])
+def get_traceability_matrix(db: DbSession):
+    return requirement_service.get_traceability_matrix(db)

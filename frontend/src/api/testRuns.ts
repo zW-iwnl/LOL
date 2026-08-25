@@ -1,6 +1,41 @@
-import { request, type Priority, type TestCase, type TestRunCaseResult } from "./client";
+import {
+  request,
+  type TestCase,
+  type TestRunCaseResult,
+  type TestRunStepResult,
+  type TestRunStepResultValue,
+} from "./client";
 
 export type TestRunStatus = "open" | "in_progress" | "completed" | "archived";
+
+export type TestRunAttempt = {
+  id: number;
+  test_run_id: number;
+  attempt_number: number;
+  status: TestRunStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: number;
+  last_test_run_case_id: number | null;
+  last_step_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TestRunCaseAttemptHistory = {
+  id: number;
+  test_run_attempt_id: number;
+  test_run_attempt_number: number;
+  test_run_case_id: number;
+  attempt_number: number;
+  result: TestRunCaseResult;
+  comment: string | null;
+  executed_by: number | null;
+  executed_at: string | null;
+  step_results: TestRunStepResult[];
+  created_at: string;
+  updated_at: string;
+};
 
 export type TestRunCase = {
   id: number;
@@ -11,16 +46,15 @@ export type TestRunCase = {
   comment: string | null;
   executed_by: number | null;
   executed_at: string | null;
-  defect_count: number;
   test_case_version: number;
   test_case_snapshot: Record<string, unknown> | null;
+  step_results: TestRunStepResult[];
   created_at: string;
   updated_at: string;
 };
 
 export type TestRun = {
   id: number;
-  project_id: number;
   name: string;
   description: string | null;
   version: string | null;
@@ -57,14 +91,17 @@ export type TestRunAddCasesPayload = {
 };
 
 export type TestRunExecutionCase = TestRunCase & {
+  case_attempt_id: number;
+  case_attempts: TestRunCaseAttemptHistory[];
   code: string;
   title: string;
-  priority: Priority;
   suite_name: string | null;
   test_case: TestCase;
 };
 
 export type TestRunExecution = Omit<TestRun, "test_run_cases"> & {
+  attempts: TestRunAttempt[];
+  selected_attempt_id: number;
   test_run_cases: TestRunExecutionCase[];
 };
 
@@ -97,16 +134,16 @@ function buildQuery(params: GetTestRunsParams = {}) {
   return query ? `?${query}` : "";
 }
 
-export function getTestRuns(projectId: number, params: GetTestRunsParams = {}) {
-  return request<TestRun[]>(`/projects/${projectId}/test-runs${buildQuery(params)}`);
+export function getTestRuns(params: GetTestRunsParams = {}) {
+  return request<TestRun[]>(`/test-runs${buildQuery(params)}`);
 }
 
 export function getTestRun(testRunId: number) {
   return request<TestRun>(`/test-runs/${testRunId}`);
 }
 
-export function createTestRun(projectId: number, payload: TestRunCreatePayload) {
-  return request<TestRun>(`/projects/${projectId}/test-runs`, {
+export function createTestRun(payload: TestRunCreatePayload) {
+  return request<TestRun>("/test-runs", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -145,6 +182,33 @@ export function removeTestRunCase(testRunCaseId: number) {
   });
 }
 
-export function getTestRunExecution(testRunId: number) {
-  return request<TestRunExecution>(`/test-runs/${testRunId}/execution`);
+export function getTestRunExecution(testRunId: number, attemptId?: number | null) {
+  const query = attemptId ? `?attempt_id=${attemptId}` : "";
+  return request<TestRunExecution>(`/test-runs/${testRunId}/execution${query}`);
+}
+
+export function createTestRunRerun(testRunId: number) {
+  return request<TestRunExecution>(`/test-runs/${testRunId}/reruns`, {
+    method: "POST",
+  });
+}
+
+export function createTestRunCaseRerun(caseAttemptId: number) {
+  return request<TestRunExecution>(`/test-run-case-attempts/${caseAttemptId}/reruns`, {
+    method: "POST",
+  });
+}
+
+export function updateTestRunStepResult(
+  caseAttemptId: number,
+  testStepId: number,
+  result: TestRunStepResultValue,
+) {
+  return request<TestRunStepResult>(
+    `/test-run-case-attempts/${caseAttemptId}/steps/${testStepId}/result`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ result }),
+    },
+  );
 }

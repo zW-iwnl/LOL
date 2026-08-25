@@ -1,0 +1,31 @@
+import type { ReactNode } from "react";
+import type { TestCase, TestSuite } from "../../api/client";
+import type { SuiteSelection } from "../test-suites/suiteTree";
+import type { RepositoryWorkspaceModel } from "./repositoryModel";
+
+export type RepositoryViewProps = {
+  model: RepositoryWorkspaceModel;
+  selected: SuiteSelection;
+  collapsedIds: ReadonlySet<number>;
+  rootCollapsed: boolean;
+  query: string;
+  favoriteSuiteIds: number[];
+  selectedCaseIds: ReadonlySet<number>;
+  deletingCases: boolean;
+  movingCases: boolean;
+  createForm: ReactNode | null;
+  createFormSelection: SuiteSelection | null;
+  onSelectSuite: (selection: SuiteSelection) => void;
+  onToggleCollapsed: (suiteId: number) => void;
+  onToggleRootCollapsed: () => void;
+  onToggleFavorite: (suiteId: number) => void;
+  onCreateTestCase: (selection: SuiteSelection) => void;
+  onCreateSuite: (selection: SuiteSelection) => void;
+  onEditSuite: (suite: TestSuite) => void;
+  onDeleteSuite: (suite: TestSuite) => void;
+  onToggleCase: (testCaseId: number, checked: boolean) => void;
+  onToggleAllCases: (testCaseIds: number[], checked: boolean) => void;
+  onDeleteCases: (testCaseIds: number[]) => void;
+  onMoveCases: (testCaseIds: number[], target: SuiteSelection) => void;
+  onOpenCase: (testCase: TestCase) => void;
+};

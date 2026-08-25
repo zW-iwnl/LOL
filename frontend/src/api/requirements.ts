@@ -1,10 +1,9 @@
-import { request, type Defect, type Priority, type TestCase, type TestRunCaseResult } from "./client";
+import { request, type Priority, type TestCase, type TestRunCaseResult } from "./client";
 
 export type RequirementStatus = "draft" | "approved" | "deprecated";
 
 export type Requirement = {
   id: number;
-  project_id: number;
   code: string;
   title: string;
   description: string | null;
@@ -31,24 +30,22 @@ export type TraceabilityRow = {
   requirement_title: string;
   requirement_priority: string;
   requirement_status: string;
-  test_cases: Array<{ id: number; code: string; title: string; status: string; priority: string }>;
+  test_cases: Array<{ id: number; code: string; title: string; status: string }>;
   coverage_status: "covered" | "missing_tests";
-  risk_status: "missing_tests" | "defect_risk" | "failing" | "partial" | "verified";
+  risk_status: "missing_tests" | "failing" | "partial" | "verified";
   tested_case_count: number;
   failed_case_count: number;
   blocked_case_count: number;
-  open_defect_count: number;
   latest_result: TestRunCaseResult | null;
   latest_executed_at: string | null;
-  open_defects: Defect[];
 };
 
-export function getRequirements(projectId: number) {
-  return request<Requirement[]>(`/projects/${projectId}/requirements`);
+export function getRequirements() {
+  return request<Requirement[]>("/requirements");
 }
 
-export function createRequirement(projectId: number, payload: RequirementPayload) {
-  return request<Requirement>(`/projects/${projectId}/requirements`, {
+export function createRequirement(payload: RequirementPayload) {
+  return request<Requirement>("/requirements", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -67,6 +64,6 @@ export function unlinkRequirementTestCase(requirementId: number, testCaseId: num
   });
 }
 
-export function getTraceability(projectId: number) {
-  return request<TraceabilityRow[]>(`/projects/${projectId}/traceability`);
+export function getTraceability() {
+  return request<TraceabilityRow[]>("/traceability");
 }

@@ -1,20 +1,24 @@
-import { ChevronDown, ChevronRight, Plus, RefreshCw, Save, Search, Trash2, Unlink } from "lucide-react";
+import { Plus, RefreshCw, Save, Trash2, Unlink } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   createTestSuite,
   deleteTestSuite,
-  getTestSuiteChildren,
   getTestSuites,
+  getSuiteGroups,
   getTestSuiteTestCases,
-  searchTestSuites,
   updateTestCase,
   updateTestSuite,
+  type SuiteGroup,
   type TestCase,
   type TestSuite,
 } from "../api/client";
-import { ErrorState, LoadingState, useCurrentProject } from "../api/hooks";
+import { ErrorState, LoadingState } from "../api/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { SuiteNavigator } from "../components/test-suites/SuiteNavigator";
+import { SuiteGroupManager } from "../components/test-suites/SuiteGroupManager";
+import type { SuiteSelection } from "../components/test-suites/suiteTree";
+import { useSuiteViewState } from "../components/test-suites/useSuiteViewState";
 
 type SuiteForm = {
   name: string;
@@ -23,6 +27,7 @@ type SuiteForm = {
   parentSuiteId: string;
   sortOrder: string;
   isActive: boolean;
+  groupIds: string[];
 };
 
 const emptyForm: SuiteForm = {
@@ -32,6 +37,7 @@ const emptyForm: SuiteForm = {
   parentSuiteId: "",
   sortOrder: "0",
   isActive: true,
+  groupIds: [],
 };
 
 function formFromSuite(suite: TestSuite | null): SuiteForm {
@@ -46,25 +52,27 @@ function formFromSuite(suite: TestSuite | null): SuiteForm {
     parentSuiteId: suite.parent_suite_id?.toString() ?? "",
     sortOrder: suite.sort_order.toString(),
     isActive: suite.is_active,
+    groupIds: suite.group_ids.map(String),
   };
 }
 
 export function TestSuitesPage() {
-  const { project, loading: projectLoading, error: projectError } = useCurrentProject();
-  const [rootSuites, setRootSuites] = useState<TestSuite[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [allSuites, setAllSuites] = useState<TestSuite[]>([]);
-  const [childrenBySuite, setChildrenBySuite] = useState<Record<number, TestSuite[]>>({});
-  const [expandedSuiteIds, setExpandedSuiteIds] = useState<Set<number>>(new Set());
-  const [selectedSuite, setSelectedSuite] = useState<TestSuite | null>(null);
+  const [groups, setGroups] = useState<SuiteGroup[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [query, setQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<TestSuite[] | null>(null);
   const [createForm, setCreateForm] = useState<SuiteForm>(emptyForm);
   const [editForm, setEditForm] = useState<SuiteForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [casesLoading, setCasesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [suiteView, setSuiteView] = useSuiteViewState("suites", "tree");
+  const selectedSuiteId = Number(searchParams.get("suite"));
+  const selectedSuite = Number.isInteger(selectedSuiteId) && selectedSuiteId > 0
+    ? allSuites.find((suite) => suite.id === selectedSuiteId) ?? null
+    : null;
 
   const editParentOptions = useMemo(() => {
     if (!selectedSuite) {
@@ -74,24 +82,16 @@ export function TestSuitesPage() {
   }, [allSuites, selectedSuite]);
 
   useEffect(() => {
-    if (!project) {
-      return;
-    }
-
     setLoading(true);
     setError(null);
-    getTestSuites(project.id)
-      .then((suites) => {
-        const roots = suites.filter((suite) => suite.parent_suite_id === null);
+    Promise.all([getTestSuites(), getSuiteGroups()])
+      .then(([suites, loadedGroups]) => {
         setAllSuites(suites);
-        setRootSuites(roots);
-        setChildrenBySuite({});
-        setExpandedSuiteIds(new Set());
-        setSelectedSuite((current) => current ?? roots[0] ?? null);
+        setGroups(loadedGroups);
       })
       .catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Suity se nepodařilo načíst."))
       .finally(() => setLoading(false));
-  }, [project]);
+  }, []);
 
   useEffect(() => {
     if (!selectedSuite) {
@@ -108,86 +108,51 @@ export function TestSuitesPage() {
       .finally(() => setCasesLoading(false));
   }, [selectedSuite]);
 
-  useEffect(() => {
-    if (!project || query.trim().length < 2) {
-      setSearchResults(null);
-      return;
-    }
+  function selectSuite(selection: SuiteSelection) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (typeof selection === "number") {
+        next.set("suite", selection.toString());
+      } else {
+        next.delete("suite");
+      }
+      return next;
+    });
+  }
 
-    const timer = window.setTimeout(() => {
-      searchTestSuites(project.id, query.trim())
-        .then(setSearchResults)
-        .catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Vyhledávání selhalo."));
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [project, query]);
-
-  async function loadChildren(suite: TestSuite) {
+  async function refreshSuites() {
+    setLoading(true);
     setError(null);
     try {
-      const children = await getTestSuiteChildren(suite.id);
-      setChildrenBySuite((current) => ({ ...current, [suite.id]: children }));
-      setExpandedSuiteIds((current) => new Set(current).add(suite.id));
+      setAllSuites(await getTestSuites());
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Children se nepodařilo načíst.");
+      setError(loadError instanceof Error ? loadError.message : "Suity se nepodařilo načíst.");
+    } finally {
+      setLoading(false);
     }
-  }
-
-  async function toggleSuite(suite: TestSuite) {
-    if (expandedSuiteIds.has(suite.id)) {
-      setExpandedSuiteIds((current) => {
-        const next = new Set(current);
-        next.delete(suite.id);
-        return next;
-      });
-      return;
-    }
-
-    await loadChildren(suite);
-  }
-
-  async function selectSuite(suite: TestSuite) {
-    setSelectedSuite(suite);
-    if (!childrenBySuite[suite.id]) {
-      await loadChildren(suite);
-    }
-  }
-
-  async function refreshRoots() {
-    if (!project) {
-      return;
-    }
-    setLoading(true);
-    const suites = await getTestSuites(project.id);
-    setAllSuites(suites);
-    setRootSuites(suites.filter((suite) => suite.parent_suite_id === null));
-    setLoading(false);
   }
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    if (!project || !createForm.name.trim()) {
+    if (!createForm.name.trim()) {
       return;
     }
 
     setError(null);
     setMessage(null);
     try {
-      const created = await createTestSuite(project.id, {
+      const created = await createTestSuite({
         name: createForm.name.trim(),
         description: createForm.description.trim() || null,
         parent_suite_id: createForm.placement === "child" && createForm.parentSuiteId ? Number(createForm.parentSuiteId) : null,
         sort_order: Number(createForm.sortOrder) || 0,
         is_active: createForm.isActive,
+        group_ids: createForm.groupIds.map(Number),
       });
       setMessage("Test suite byla vytvořena.");
       setCreateForm(emptyForm);
-      if (created.parent_suite_id) {
-        await loadChildren({ ...created, id: created.parent_suite_id });
-      }
-      await refreshRoots();
-      setSelectedSuite(created);
+      await refreshSuites();
+      selectSuite(created.id);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Test suite se nepodařilo vytvořit.");
     }
@@ -208,13 +173,11 @@ export function TestSuitesPage() {
         parent_suite_id: editForm.placement === "child" && editForm.parentSuiteId ? Number(editForm.parentSuiteId) : null,
         sort_order: Number(editForm.sortOrder) || 0,
         is_active: editForm.isActive,
+        group_ids: editForm.groupIds.map(Number),
       });
       setMessage("Test suite byla upravena.");
-      await refreshRoots();
-      if (updated.parent_suite_id) {
-        await loadChildren({ ...updated, id: updated.parent_suite_id });
-      }
-      setSelectedSuite(updated);
+      await refreshSuites();
+      selectSuite(updated.id);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Test suite se nepodařilo upravit.");
     }
@@ -229,14 +192,15 @@ export function TestSuitesPage() {
       return;
     }
 
+    const parentSuiteId = selectedSuite.parent_suite_id;
     setError(null);
     setMessage(null);
     try {
       await deleteTestSuite(selectedSuite.id);
       setMessage("Test suite byla smazána.");
-      setSelectedSuite(null);
       setTestCases([]);
-      await refreshRoots();
+      selectSuite(parentSuiteId ?? "root");
+      await refreshSuites();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Test suite se nepodařilo smazat.");
     }
@@ -246,7 +210,7 @@ export function TestSuitesPage() {
     if (!selectedSuite) {
       return;
     }
-    const confirmed = window.confirm(`Odebrat test case ${testCase.code} ze suity "${selectedSuite.name}"? Test case zůstane v projektu bez suity.`);
+    const confirmed = window.confirm(`Odebrat test case ${testCase.code} ze suity "${selectedSuite.name}"? Test case bude přesunut pod Počátek vesmíru.`);
     if (!confirmed) {
       return;
     }
@@ -256,93 +220,45 @@ export function TestSuitesPage() {
     try {
       await updateTestCase(testCase.id, { suite_id: null });
       setMessage("Test case byl odebrán ze suity.");
-      const updatedCases = await getTestSuiteTestCases(selectedSuite.id);
-      setTestCases(updatedCases);
+      setTestCases(await getTestSuiteTestCases(selectedSuite.id));
+      await refreshSuites();
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : "Test case se nepodařilo odebrat ze suity.");
     }
   }
 
-  function renderSuiteTree(suites: TestSuite[]) {
-    return suites.map((suite) => {
-      const children = childrenBySuite[suite.id] ?? [];
-      const expanded = expandedSuiteIds.has(suite.id);
-      const selected = selectedSuite?.id === suite.id;
-
-      return (
-        <div key={suite.id}>
-          <div
-            className={[
-              "mb-1 grid grid-cols-[28px_1fr] items-center rounded-md text-sm",
-              selected ? "bg-cyan-50 text-cyan-700" : "text-slate-700 hover:bg-slate-50",
-            ].join(" ")}
-            style={{ marginLeft: `${suite.level * 16}px` }}
-          >
-            <button className="grid h-9 place-items-center" type="button" onClick={() => void toggleSuite(suite)}>
-              {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-            <button className="min-w-0 py-2 pr-3 text-left" type="button" onClick={() => void selectSuite(suite)}>
-              <span className="block truncate font-medium">{suite.name}</span>
-            </button>
-          </div>
-          {expanded && children.length > 0 && renderSuiteTree(children)}
-        </div>
-      );
-    });
-  }
-
-  if (projectLoading || loading) {
+  if (loading) {
     return <LoadingState />;
   }
 
-  if (projectError) {
-    return <ErrorState message={projectError} />;
-  }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Test Suity" description="Strom testovacích sad, detail vybrané suity a správa parent vazeb." />
+      <PageHeader title="Test Suity" description="Správa testovacích sad ve stromu, složkách nebo myšlenkové mapě." />
       {error && <ErrorState message={error} />}
       {message && <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{message}</div>}
 
-      <section className="grid gap-6 xl:grid-cols-[340px_1fr_380px]">
-        <aside className="rounded-md border border-slate-200 bg-white">
-          <div className="space-y-3 border-b border-slate-200 p-4">
-            <label className="relative block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm"
-                placeholder="Hledat podle názvu"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <button className="inline-flex items-center gap-2 text-sm font-medium text-cyan-700" type="button" onClick={() => void refreshRoots()}>
-              <RefreshCw size={15} /> Obnovit root suity
-            </button>
-          </div>
-          <div className="max-h-[680px] overflow-y-auto p-2">
-            {searchResults ? (
-              <div className="space-y-1">
-                <div className="px-2 py-1 text-xs font-medium uppercase text-slate-500">Výsledky hledání</div>
-                {searchResults.map((suite) => (
-                  <button
-                    key={suite.id}
-                    className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
-                    type="button"
-                    onClick={() => void selectSuite(suite)}
-                  >
-                    <span className="block font-medium">{suite.name}</span>
-                    <span className="text-xs text-slate-500">{suite.path}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              renderSuiteTree(rootSuites)
-            )}
-          </div>
-        </aside>
+      <SuiteNavigator
+        suites={allSuites}
+        groups={groups}
+        selected={selectedSuite?.id ?? "root"}
+        view={suiteView}
+        query={query}
+        onQueryChange={setQuery}
+        onSelect={selectSuite}
+        onViewChange={setSuiteView}
+        actions={(
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            type="button"
+            onClick={() => void refreshSuites()}
+          >
+            <RefreshCw size={15} /> Obnovit
+          </button>
+        )}
+      />
 
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main className="space-y-6">
           <section className="rounded-md border border-slate-200 bg-white p-5">
             <h2 className="font-semibold">Detail test suite</h2>
@@ -359,7 +275,7 @@ export function TestSuitesPage() {
                 </div>
               </dl>
             ) : (
-              <p className="mt-3 text-sm text-slate-500">Vyber test suite ze stromu.</p>
+              <p className="mt-3 text-sm text-slate-500">Vyber test suite v navigaci.</p>
             )}
           </section>
 
@@ -376,7 +292,6 @@ export function TestSuitesPage() {
                     <tr>
                       <th className="px-5 py-3 font-medium">Kód</th>
                       <th className="px-5 py-3 font-medium">Název</th>
-                      <th className="px-5 py-3 font-medium">Priorita</th>
                       <th className="px-5 py-3 font-medium">Stav</th>
                       <th className="px-5 py-3 font-medium">Akce</th>
                     </tr>
@@ -388,7 +303,6 @@ export function TestSuitesPage() {
                           <Link to={`/test-cases/${testCase.id}`}>{testCase.code}</Link>
                         </td>
                         <td className="px-5 py-3">{testCase.title}</td>
-                        <td className="px-5 py-3">{testCase.priority}</td>
                         <td className="px-5 py-3">{testCase.status}</td>
                         <td className="px-5 py-3">
                           <button
@@ -410,14 +324,19 @@ export function TestSuitesPage() {
         </main>
 
         <aside className="space-y-6">
+          <SuiteGroupManager groups={groups} suites={allSuites} onChanged={async () => {
+            const [suites, loadedGroups] = await Promise.all([getTestSuites(), getSuiteGroups()]);
+            setAllSuites(suites);
+            setGroups(loadedGroups);
+          }} />
           <form className="rounded-md border border-slate-200 bg-white p-5" onSubmit={(event) => void handleCreate(event)}>
             <h2 className="flex items-center gap-2 font-semibold"><Plus size={18} /> Nová test suite</h2>
-            <SuiteFormFields form={createForm} allSuites={allSuites} onChange={setCreateForm} submitLabel="Vytvořit suitu" />
+            <SuiteFormFields form={createForm} allSuites={allSuites} groups={groups} onChange={setCreateForm} submitLabel="Vytvořit suitu" />
           </form>
 
           <form className="rounded-md border border-slate-200 bg-white p-5" onSubmit={(event) => void handleUpdate(event)}>
             <h2 className="flex items-center gap-2 font-semibold"><Save size={18} /> Editace test suite</h2>
-            <SuiteFormFields form={editForm} allSuites={editParentOptions} onChange={setEditForm} submitLabel="Uložit změny" disabled={!selectedSuite} />
+            <SuiteFormFields form={editForm} allSuites={editParentOptions} groups={groups} onChange={setEditForm} submitLabel="Uložit změny" disabled={!selectedSuite} />
             <button
               className="mt-3 inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!selectedSuite}
@@ -436,12 +355,14 @@ export function TestSuitesPage() {
 function SuiteFormFields({
   form,
   allSuites,
+  groups,
   onChange,
   submitLabel,
   disabled = false,
 }: {
   form: SuiteForm;
   allSuites: TestSuite[];
+  groups: SuiteGroup[];
   onChange: (form: SuiteForm) => void;
   submitLabel: string;
   disabled?: boolean;
@@ -470,23 +391,23 @@ function SuiteFormFields({
         </select>
       </label>
       {form.placement === "child" ? (
-      <label className="block text-sm">
-        <span className="font-medium">Parent suite</span>
-        <select
-          className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 disabled:bg-slate-50"
-          disabled={disabled}
-          value={form.parentSuiteId}
-          onChange={(event) => onChange({ ...form, parentSuiteId: event.target.value })}
-          required
-        >
-          <option value="">Vyber parent suitu</option>
-          {allSuites.map((suite) => (
-            <option key={suite.id} value={suite.id}>
-              {suite.path}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="block text-sm">
+          <span className="font-medium">Parent suite</span>
+          <select
+            className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 disabled:bg-slate-50"
+            disabled={disabled}
+            value={form.parentSuiteId}
+            onChange={(event) => onChange({ ...form, parentSuiteId: event.target.value })}
+            required
+          >
+            <option value="">Vyber parent suitu</option>
+            {allSuites.map((suite) => (
+              <option key={suite.id} value={suite.id}>
+                {suite.path}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
       <label className="block text-sm">
         <span className="font-medium">Popis</span>
@@ -519,6 +440,29 @@ function SuiteFormFields({
           Aktivní
         </label>
       </div>
+      <fieldset className="space-y-2 rounded-md border border-slate-200 p-3" disabled={disabled}>
+        <legend className="px-1 text-sm font-medium">Skupiny</legend>
+        {groups.map((group) => {
+          const value = String(group.id);
+          const parent = group.parent_group_id ? groups.find((candidate) => candidate.id === group.parent_group_id) : null;
+          return (
+            <label className="flex items-center gap-2 text-sm" key={group.id}>
+              <input
+                checked={form.groupIds.includes(value)}
+                type="checkbox"
+                onChange={(event) => onChange({
+                  ...form,
+                  groupIds: event.target.checked
+                    ? [...form.groupIds, value]
+                    : form.groupIds.filter((groupId) => groupId !== value),
+                })}
+              />
+              <span>{parent ? `${parent.name} / ` : ""}{group.name}</span>
+            </label>
+          );
+        })}
+        {groups.length === 0 && <p className="text-xs text-slate-500">Nejdřív vytvoř skupinu v panelu výše.</p>}
+      </fieldset>
       <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={disabled || !form.name.trim()} type="submit">
         <Save size={16} /> {submitLabel}
       </button>

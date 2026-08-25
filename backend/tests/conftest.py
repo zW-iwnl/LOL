@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db
 from app.core.security import hash_password
 from app.main import app
-from app.models import Project, User
+from app.models import User
 
 
 @compiles(BigInteger, "sqlite")
@@ -48,15 +48,7 @@ def database() -> Generator[None, None, None]:
             role="admin",
             is_active=True,
         )
-        project = Project(
-            id=1,
-            name="E-shop",
-            code="ESHOP",
-            description="Demo projekt",
-            status="active",
-            created_by=1,
-        )
-        db.add_all([user, project])
+        db.add(user)
         db.commit()
     finally:
         db.close()

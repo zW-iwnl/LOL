@@ -19,7 +19,6 @@ import { getUsers, type TestCase } from "../api/client";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { resultLabel } from "../data/mockData";
-import { useActiveProject } from "../projects/ActiveProjectContext";
 
 const statusLabels: Record<TestRunStatus, string> = {
   open: "Otevřený",
@@ -128,16 +127,14 @@ function buildPayload(form: TestRunFormState): TestRunCreatePayload {
 
 type CasePickerFiltersProps = {
   query: string;
-  priority: string;
   status: string;
   onQueryChange: (value: string) => void;
-  onPriorityChange: (value: string) => void;
   onStatusChange: (value: string) => void;
 };
 
-function CasePickerFilters({ query, priority, status, onQueryChange, onPriorityChange, onStatusChange }: CasePickerFiltersProps) {
+function CasePickerFilters({ query, status, onQueryChange, onStatusChange }: CasePickerFiltersProps) {
   return (
-    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_150px_150px]">
+    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_150px]">
       <label className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
         <input
@@ -148,13 +145,6 @@ function CasePickerFilters({ query, priority, status, onQueryChange, onPriorityC
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </label>
-      <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={priority} onChange={(event) => onPriorityChange(event.target.value)}>
-        <option value="">Všechny priority</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
       <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={status} onChange={(event) => onStatusChange(event.target.value)}>
         <option value="">Všechny statusy</option>
         <option value="ready">Ready</option>
@@ -185,7 +175,7 @@ function CasePickerList({ testCases, selectedCaseIds, onToggle, emptyText = "Nej
           />
           <span>
             <span className="font-medium">{testCase.code} - {testCase.title}</span>
-            <span className="mt-1 block text-xs text-slate-500">{testCase.priority} / {testCase.status}</span>
+            <span className="mt-1 block text-xs text-slate-500">{testCase.status}</span>
           </span>
         </label>
       ))}
@@ -199,14 +189,6 @@ export function TestRunsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const shouldOpenCreate = searchParams.get("new") === "1" || (location.state as { openCreateRun?: boolean } | null)?.openCreateRun === true;
-  const {
-    projects,
-    activeProjectId,
-    activeProject,
-    setActiveProjectId,
-    loading: projectsLoading,
-    error: projectsError,
-  } = useActiveProject();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TestRunStatus | "">("");
   const [environmentFilter, setEnvironmentFilter] = useState("");
@@ -221,21 +203,17 @@ export function TestRunsPage() {
   const [selectedCaseIds, setSelectedCaseIds] = useState<number[]>([]);
   const [assignedTo, setAssignedTo] = useState("");
   const [caseQuery, setCaseQuery] = useState("");
-  const [casePriorityFilter, setCasePriorityFilter] = useState("");
   const [caseStatusFilter, setCaseStatusFilter] = useState("");
 
   const runsState = useApiResource(
-    () =>
-      activeProjectId
-        ? getTestRuns(activeProjectId, { q: query, status: statusFilter, environment: environmentFilter, limit: 100, offset: 0 })
-        : Promise.resolve([]),
-    [activeProjectId, query, statusFilter, environmentFilter, refreshKey],
+    () => getTestRuns({ q: query, status: statusFilter, environment: environmentFilter, limit: 100, offset: 0 }),
+    [query, statusFilter, environmentFilter, refreshKey],
   );
   const allRunsState = useApiResource(
-    () => (activeProjectId ? getTestRuns(activeProjectId, { limit: 100, offset: 0 }) : Promise.resolve([])),
-    [activeProjectId, refreshKey],
+    () => getTestRuns({ limit: 100, offset: 0 }),
+    [refreshKey],
   );
-  const casesState = useApiResource(() => (activeProjectId ? getTestCases(activeProjectId) : Promise.resolve([])), [activeProjectId, refreshKey]);
+  const casesState = useApiResource(() => getTestCases(), [refreshKey]);
   const usersState = useApiResource(getUsers, [refreshKey]);
 
   const runs = runsState.data ?? [];
@@ -243,7 +221,6 @@ export function TestRunsPage() {
   const testCases = casesState.data ?? [];
   const users = usersState.data ?? [];
 
-  const selectedProject = activeProject;
   const selectedRunLatest = useMemo(
     () => (selectedRun ? runs.find((run) => run.id === selectedRun.id) ?? selectedRun : null),
     [runs, selectedRun],
@@ -264,9 +241,8 @@ export function TestRunsPage() {
   const filteredAvailableTestCases = availableTestCases.filter((testCase) => {
     const normalizedQuery = caseQuery.trim().toLowerCase();
     const matchesQuery = !normalizedQuery || `${testCase.code} ${testCase.title}`.toLowerCase().includes(normalizedQuery);
-    const matchesPriority = !casePriorityFilter || testCase.priority === casePriorityFilter;
     const matchesStatus = !caseStatusFilter || testCase.status === caseStatusFilter;
-    return matchesQuery && matchesPriority && matchesStatus;
+    return matchesQuery && matchesStatus;
   });
   const filteredAvailableIds = filteredAvailableTestCases.map((testCase) => testCase.id);
   const allFilteredSelected = filteredAvailableIds.length > 0 && filteredAvailableIds.every((id) => selectedCaseIds.includes(id));
@@ -286,7 +262,6 @@ export function TestRunsPage() {
     setSelectedCaseIds([]);
     setAssignedTo("");
     setCaseQuery("");
-    setCasePriorityFilter("");
     setCaseStatusFilter("");
     setModalMode("create");
   }
@@ -305,7 +280,6 @@ export function TestRunsPage() {
     setSelectedCaseIds([]);
     setAssignedTo("");
     setCaseQuery("");
-    setCasePriorityFilter("");
     setCaseStatusFilter("");
     setModalMode("detail");
   }
@@ -318,7 +292,6 @@ export function TestRunsPage() {
     setSelectedCaseIds([]);
     setAssignedTo("");
     setCaseQuery("");
-    setCasePriorityFilter("");
     setCaseStatusFilter("");
   }
 
@@ -365,10 +338,6 @@ export function TestRunsPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeProjectId) {
-      setFormError("Nejdřív vyber projekt.");
-      return;
-    }
     const validationError = validateForm();
     if (validationError) {
       setFormError(validationError);
@@ -385,7 +354,7 @@ export function TestRunsPage() {
     setPageError(null);
     try {
       const payload = buildPayload(form);
-      let savedRun = modalMode === "edit" && selectedRun ? await updateTestRun(selectedRun.id, payload) : await createTestRun(activeProjectId, payload);
+      let savedRun = modalMode === "edit" && selectedRun ? await updateTestRun(selectedRun.id, payload) : await createTestRun(payload);
       if (modalMode === "create" && selectedCaseIds.length > 0) {
         savedRun = await addCasesToTestRun(savedRun.id, {
           test_case_ids: selectedCaseIds,
@@ -485,41 +454,21 @@ export function TestRunsPage() {
     }
   }
 
-  if (projectsLoading || runsState.loading || allRunsState.loading || casesState.loading || usersState.loading) {
+  if (runsState.loading || allRunsState.loading || casesState.loading || usersState.loading) {
     return <LoadingState />;
   }
 
-  if (projectsError || runsState.error || allRunsState.error || casesState.error || usersState.error) {
-    return <ErrorState message={projectsError ?? runsState.error ?? allRunsState.error ?? casesState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
+  if (runsState.error || allRunsState.error || casesState.error || usersState.error) {
+    return <ErrorState message={runsState.error ?? allRunsState.error ?? casesState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <PageHeader title="Test Runs" description="Plánování, správa a sledování běhů testování." />
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-64 text-sm">
-            <span className="font-medium">Projekt</span>
-            <select
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={activeProjectId ?? ""}
-              onChange={(event) => {
-                setActiveProjectId(event.target.value ? Number(event.target.value) : null);
-                closeModal();
-              }}
-            >
-              {projects.length === 0 ? <option value="">Žádný projekt</option> : null}
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.code} - {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} type="button">
-            <Plus size={16} /> Nový test run
-          </button>
-        </div>
+        <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} type="button">
+          <Plus size={16} /> Nový test run
+        </button>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -579,7 +528,7 @@ export function TestRunsPage() {
               <PlayCircle size={22} />
             </div>
             <h2 className="mt-4 font-semibold">Žádné test runy</h2>
-            <p className="mt-1 text-sm text-slate-500">{selectedProject ? "Změň filtr nebo založ první test run." : "Nejdřív založ projekt."}</p>
+            <p className="mt-1 text-sm text-slate-500">Změň filtr nebo založ první test run.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -660,7 +609,6 @@ export function TestRunsPage() {
                 <h2 className="text-lg font-semibold">
                   {modalMode === "create" ? "Nový test run" : modalMode === "edit" ? "Upravit test run" : "Detail test runu"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">Projekt: {selectedProject?.name ?? "-"}</p>
               </div>
               <button className="rounded-md p-1 text-slate-500 hover:bg-slate-100" onClick={closeModal} type="button">
                 <X size={18} />
@@ -745,10 +693,8 @@ export function TestRunsPage() {
                     </div>
                     <CasePickerFilters
                       query={caseQuery}
-                      priority={casePriorityFilter}
                       status={caseStatusFilter}
                       onQueryChange={setCaseQuery}
-                      onPriorityChange={setCasePriorityFilter}
                       onStatusChange={setCaseStatusFilter}
                     />
                     <CasePickerList
@@ -840,10 +786,8 @@ export function TestRunsPage() {
                   <div className="font-semibold">Přidat test cases</div>
                   <CasePickerFilters
                     query={caseQuery}
-                    priority={casePriorityFilter}
                     status={caseStatusFilter}
                     onQueryChange={setCaseQuery}
-                    onPriorityChange={setCasePriorityFilter}
                     onStatusChange={setCaseStatusFilter}
                   />
                   <div className="mt-3 grid gap-3 md:grid-cols-[1fr_220px]">

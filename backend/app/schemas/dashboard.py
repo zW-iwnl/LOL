@@ -5,7 +5,6 @@ class DashboardStats(BaseModel):
     test_cases_count: int
     active_test_runs_count: int
     pass_rate: float
-    open_defects_count: int
 
 
 class DashboardRun(BaseModel):

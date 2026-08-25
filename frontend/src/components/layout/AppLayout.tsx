@@ -1,12 +1,10 @@
 import {
   BarChart3,
-  Bug,
   ClipboardCheck,
-  CalendarRange,
-  FolderKanban,
   LayoutDashboard,
   LogOut,
   Search,
+  Settings2,
   ShieldCheck,
 } from "lucide-react";
 import { FormEvent, useState } from "react";
@@ -17,12 +15,10 @@ import { useAuth } from "../../auth/AuthContext";
 
 const navigation = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
-  { label: "Projekty", to: "/projects", icon: FolderKanban },
   { label: "Repository", to: "/test-cases", icon: ClipboardCheck },
-  { label: "Test Plans", to: "/test-plans", icon: CalendarRange },
   { label: "Requirements", to: "/requirements", icon: ShieldCheck },
   { label: "Test Runs", to: "/test-runs", icon: BarChart3 },
-  { label: "Defecty", to: "/defects", icon: Bug },
+  { label: "Nastavení comboboxů", to: "/test-case-properties", icon: Settings2 },
 ];
 
 type AppLayoutProps = {
@@ -46,14 +42,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (!query) {
       return;
     }
-    navigate(`/test-cases?search=${encodeURIComponent(query)}`);
+    navigate(`/test-cases?q=${encodeURIComponent(query)}`);
   }
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-900">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white px-4 py-5 lg:block">
         <div className="mb-8 px-2">
-          <div className="text-lg font-semibold">Test Manager</div>
+          <div className="text-lg font-semibold">FET - fio evidence testů</div>
           <div className="text-sm text-slate-500">Interní QA portál</div>
         </div>
         <nav className="space-y-1">
@@ -90,7 +86,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
                 className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-10 pr-3 text-sm outline-none ring-cyan-500 transition focus:border-cyan-500 focus:ring-2"
-                placeholder="Hledat test case, suite nebo defect"
+                placeholder="Hledat test case nebo suite"
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}

@@ -1,13 +1,23 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from app.schemas.common import Priority, TestCaseStatus, TimestampFields
+from app.schemas.common import TestCaseStatus, TestStepType, TimestampFields
+from app.schemas.test_case_tag import TestCaseTagRead
 
 
 class TestStepBase(BaseModel):
     step_order: int = Field(ge=1)
     action: str = Field(min_length=1)
+    step_type: TestStepType = "test"
+    note: str | None = None
     expected_result: str | None = None
     test_data: str | None = None
+
+    @model_validator(mode="after")
+    def clear_test_fields_for_information_step(self):
+        if self.step_type == "information":
+            self.expected_result = None
+            self.test_data = None
+        return self
 
 
 class TestStepCreate(TestStepBase):
@@ -17,6 +27,8 @@ class TestStepCreate(TestStepBase):
 class TestStepUpdate(BaseModel):
     step_order: int | None = Field(default=None, ge=1)
     action: str | None = Field(default=None, min_length=1)
+    step_type: TestStepType | None = None
+    note: str | None = None
     expected_result: str | None = None
     test_data: str | None = None
 
@@ -33,8 +45,10 @@ class TestCaseBase(BaseModel):
     description: str | None = None
     preconditions: str | None = None
     expected_summary: str | None = None
-    priority: Priority = "medium"
-    type: str = Field(default="manual", max_length=50)
+    business_area_id: int | None = None
+    application_domain_id: int | None = None
+    object_type_id: int | None = None
+    tag_ids: list[int] = Field(default_factory=list)
     status: TestCaseStatus = "draft"
     automated: bool = False
 
@@ -50,15 +64,21 @@ class TestCaseUpdate(BaseModel):
     description: str | None = None
     preconditions: str | None = None
     expected_summary: str | None = None
-    priority: Priority | None = None
-    type: str | None = Field(default=None, max_length=50)
     status: TestCaseStatus | None = None
     automated: bool | None = None
+
+    business_area_id: int | None = None
+    application_domain_id: int | None = None
+    object_type_id: int | None = None
+    tag_ids: list[int] | None = None
 
 
 class TestCaseRead(TestCaseBase, TimestampFields):
     id: int
-    project_id: int
     version: int
     created_by: int
     steps: list[TestStepRead] = []
+    tags: list[TestCaseTagRead] = Field(default_factory=list)
+    business_area: TestCaseTagRead | None = None
+    application_domain: TestCaseTagRead | None = None
+    object_type: TestCaseTagRead | None = None

@@ -38,7 +38,7 @@ export function LoginPage() {
     <main className="grid min-h-screen place-items-center bg-[#f6f8fb] px-4 py-8 text-slate-900">
       <section className="w-full max-w-sm rounded-md border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
-          <div className="text-sm font-medium text-cyan-700">Test Manager</div>
+          <div className="text-sm font-medium text-cyan-700">FET - fio evidence testů</div>
           <h1 className="mt-1 text-2xl font-semibold">Přihlášení</h1>
         </div>
 
