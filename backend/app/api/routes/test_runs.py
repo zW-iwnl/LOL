@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Header, Query, Response, status
+from app.schemas.test_case_workflow import VersionRerun
+from app.services.test_case_operations import mutate
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.common import TestRunStatus
@@ -98,7 +100,11 @@ def create_rerun(test_run_id: int, db: DbSession, current_user: CurrentUser):
     response_model=TestRunExecutionRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_case_rerun(case_attempt_id: int, db: DbSession, current_user: CurrentUser):
+def create_case_rerun(case_attempt_id: int, db: DbSession, current_user: CurrentUser,
+                      payload: VersionRerun | None = None, idempotency_key: str | None = Header(default=None)):
+    if payload or idempotency_key:
+        return mutate(db, current_user, idempotency_key, f"attempt/{case_attempt_id}/rerun", payload,
+                      lambda: test_run_service.create_case_rerun(db, case_attempt_id, current_user, payload, commit=False))
     return test_run_service.create_case_rerun(db, case_attempt_id, current_user)
 
 

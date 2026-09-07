@@ -3,6 +3,7 @@ from fastapi import APIRouter, Response, status
 from app.api.deps import DbSession
 from app.schemas.suite_group import (
     SuiteGroupChildCreate,
+    SuiteGroupChildUpdate,
     SuiteGroupCreate,
     SuiteGroupIdsUpdate,
     SuiteGroupMemberCreate,
@@ -13,6 +14,7 @@ from app.schemas.suite_group import (
     SuiteGroupTestCaseIdsUpdate,
     SuiteGroupUpdate,
 )
+from app.schemas.test_case import TestCaseRead
 from app.schemas.test_suite import TestSuiteRead
 from app.services import suite_groups as group_service
 
@@ -32,6 +34,19 @@ def create_group(payload: SuiteGroupCreate, db: DbSession):
 @router.get("/{group_id}", response_model=SuiteGroupRead)
 def get_group(group_id: int, db: DbSession):
     return group_service.get_group(db, group_id)
+
+
+@router.get("/{group_id}/test-cases", response_model=list[TestCaseRead])
+def list_group_test_cases(
+    group_id: int,
+    db: DbSession,
+    include_descendants: bool = True,
+):
+    return group_service.list_group_test_cases(
+        db,
+        group_id,
+        include_descendants=include_descendants,
+    )
 
 
 @router.put("/{group_id}", response_model=SuiteGroupRead)
@@ -56,6 +71,25 @@ def add_child(
         parent_group_id,
         payload.child_group_id,
         payload.sort_order,
+        payload.include_descendants,
+    )
+
+
+@router.put(
+    "/{parent_group_id}/children/{child_group_id}",
+    response_model=SuiteGroupRead,
+)
+def update_child(
+    parent_group_id: int,
+    child_group_id: int,
+    payload: SuiteGroupChildUpdate,
+    db: DbSession,
+):
+    return group_service.update_child(
+        db,
+        parent_group_id,
+        child_group_id,
+        payload.include_descendants,
     )
 
 

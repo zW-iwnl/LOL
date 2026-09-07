@@ -11,6 +11,14 @@ function group(id: number, childIds: number[] = []): SuiteGroup {
     sort_order: 0,
     parent_ids: [],
     child_ids: childIds,
+    child_relations: childIds.map((childGroupId) => ({
+      parent_group_id: id,
+      child_group_id: childGroupId,
+      sort_order: 0,
+      include_descendants: true,
+      created_at: "",
+      updated_at: "",
+    })),
     created_at: "",
     updated_at: "",
     members: [],
@@ -65,6 +73,23 @@ describe("groupGraph", () => {
       "A › C",
       "B",
       "B › C",
+    ]);
+  });
+
+  it("stops a path after a child whose descendants are excluded", () => {
+    const root = group(1, [2]);
+    root.child_relations[0].include_descendants = false;
+    const groups = [
+      { ...root, name: "1111" },
+      { ...group(2, [3]), name: "2222", parent_ids: [1] },
+      { ...group(3), name: "3333", parent_ids: [2] },
+    ];
+
+    expect(groupPathRows(groups).map((row) => row.pathLabel)).toEqual([
+      "1111",
+      "1111 › 2222",
+      "2222",
+      "2222 › 3333",
     ]);
   });
 });

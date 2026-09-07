@@ -17,8 +17,10 @@ import { AccessibleDialog } from "../AccessibleDialog";
 const navigation = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Repository", to: "/test-cases", icon: ClipboardCheck },
+  { label: "Schvalování", to: "/test-case-approvals", icon: ShieldCheck },
   { label: "Requirements", to: "/requirements", icon: ShieldCheck },
   { label: "Test Runs", to: "/test-runs", icon: BarChart3 },
+  { label: "Nastavení", to: "/settings", icon: ShieldCheck },
 ];
 
 type AppLayoutProps = {

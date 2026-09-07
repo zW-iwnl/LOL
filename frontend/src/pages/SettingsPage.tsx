@@ -1,9 +1,11 @@
 import { PageHeader } from "../components/PageHeader";
+import { ReviewerRoles } from "../components/approvals/ReviewerRoles";
 
 export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Nastavení" description="Konfigurace uživatelů, rolí a integračních parametrů." />
+      <ReviewerRoles />
       <section className="rounded-md border border-slate-200 bg-white p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-sm">

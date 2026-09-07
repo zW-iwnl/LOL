@@ -1,3 +1,4 @@
+from tests.workflow_factories import create_reviewed_case
 from fastapi.testclient import TestClient
 
 from tests.test_auth import login
@@ -23,8 +24,7 @@ def test_manage_tags_and_filter_test_cases(client: TestClient) -> None:
     application_domain = create_tag(client, auth, "application_domain", "IB")
     object_type = create_tag(client, auth, "object_type", "Formulář")
 
-    create_response = client.post(
-        "/api/test-cases",
+    create_response = create_reviewed_case(client,
         headers=auth,
         json={
             "suite_id": 1,
@@ -36,7 +36,7 @@ def test_manage_tags_and_filter_test_cases(client: TestClient) -> None:
         },
     )
 
-    assert create_response.status_code == 201
+    assert create_response.status_code == 200
     test_case = create_response.json()
     assert test_case["business_area"]["name"] == "Karty"
     assert test_case["application_domain"]["name"] == "IB"
@@ -76,8 +76,7 @@ def test_rejects_tag_from_wrong_category_and_deletes_unused_tag(client: TestClie
     auth = headers(client)
     wrong_tag = create_tag(client, auth, "object_type", "Stránka")
 
-    response = client.post(
-        "/api/test-cases",
+    response = create_reviewed_case(client,
         headers=auth,
         json={
             "suite_id": 1,
@@ -100,8 +99,7 @@ def test_multiple_tags_per_category_are_persisted_filtered_and_snapshotted(clien
     domain = create_tag(client, auth, "application_domain", "Internetbanking")
     object_type = create_tag(client, auth, "object_type", "Formulář")
 
-    response = client.post(
-        "/api/test-cases",
+    response = create_reviewed_case(client,
         headers=auth,
         json={
             "suite_id": 1,
@@ -110,7 +108,7 @@ def test_multiple_tags_per_category_are_persisted_filtered_and_snapshotted(clien
             "tag_ids": [cards["id"], loans["id"], domain["id"], object_type["id"]],
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 200
     test_case = response.json()
     assert set(test_case["tag_ids"]) == {
         cards["id"],
@@ -150,13 +148,14 @@ def test_multiple_tags_per_category_are_persisted_filtered_and_snapshotted(clien
         headers=auth,
         json={"tag_ids": [loans["id"], domain["id"], object_type["id"]]},
     )
-    assert update.status_code == 200
-    assert update.json()["version"] == test_case["version"] + 1
-    assert cards["id"] not in update.json()["tag_ids"]
+    assert update.status_code == 409
+    unchanged = client.get(f"/api/test-cases/{test_case['id']}", headers=auth).json()
+    assert unchanged["version"] == test_case["version"]
+    assert cards["id"] in unchanged["tag_ids"]
 
     duplicate = client.put(
         f"/api/test-cases/{test_case['id']}",
         headers=auth,
         json={"tag_ids": [loans["id"], loans["id"]]},
     )
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 409

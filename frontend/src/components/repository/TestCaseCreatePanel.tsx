@@ -246,12 +246,10 @@ export function TestCaseCreatePanel({
                 <span className="font-medium">Stav</span>
                 <select
                   className={fieldClassName}
-                  value={form.status}
-                  onChange={(event) => onChange({ ...form, status: event.target.value as TestCaseStatus })}
+                  value="draft"
+                  disabled
                 >
-                  <option value="draft">Koncept</option>
-                  <option value="ready">Připraveno</option>
-                  <option value="deprecated">Vyřazeno</option>
+                  <option value="draft">Návrh ke schválení</option>
                 </select>
               </label>
               <label className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm lg:mt-6">

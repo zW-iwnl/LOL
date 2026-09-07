@@ -18,14 +18,22 @@ GET    /api/test-suites/{suite_id}/test-cases
 GET    /api/suite-groups
 POST   /api/suite-groups
 GET    /api/suite-groups/{group_id}
+GET    /api/suite-groups/{group_id}/test-cases?include_descendants=true
 PUT    /api/suite-groups/{group_id}
 DELETE /api/suite-groups/{group_id}
 
 POST   /api/suite-groups/{parent_group_id}/children
+PUT    /api/suite-groups/{parent_group_id}/children/{child_group_id}
 DELETE /api/suite-groups/{parent_group_id}/children/{child_group_id}
 PUT    /api/suite-groups/{group_id}/parents
 PUT    /api/suite-groups/{group_id}/test-case-members
 PUT    /api/suite-groups/suites/{suite_id}/groups
+
+Endpoint pro test cases vrací unikátní obsah skupiny. Parametr
+`include_descendants` má výchozí hodnotu `true`; při hodnotě `false` vrátí jen
+přímé odkazy a test cases z přímo vložených test suit. Rekurzivní výpočet navíc
+respektuje `include_descendants` jednotlivých vazeb mezi skupinami. POST pro
+přidání potomka přijímá tuto hodnotu v payloadu a PUT ji umožňuje změnit.
 
 ## Test Cases
 GET    /api/test-cases

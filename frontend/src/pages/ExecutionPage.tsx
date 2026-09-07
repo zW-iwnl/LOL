@@ -18,6 +18,9 @@ import {
 } from "../api/testRuns";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { resultLabel } from "../data/mockData";
+import { RunCaseCreatePanel } from "../components/approvals/RunCaseCreatePanel";
+import { RunVersionSelector } from "../components/approvals/RunVersionSelector";
+import { ApprovalStatusBadge } from "../components/approvals/ApprovalStatusBadge";
 
 const resultActions = [
   { result: "passed" as const, label: "Passed", icon: CheckCircle2, className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
@@ -92,6 +95,8 @@ function snapshotValue(value: unknown): ExecutionSnapshot | null {
 export function ExecutionPage() {
   const { testRunId } = useParams();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [proposalMode, setProposalMode] = useState<"new" | "edit" | null>(null);
+  const [versionSelectorOpen, setVersionSelectorOpen] = useState(false);
   const [selectedAttemptId, setSelectedAttemptId] = useState<number | null>(null);
   const executionState = useApiResource(
     () => (testRunId ? getTestRunExecution(Number(testRunId), selectedAttemptId) : Promise.reject(new Error("Chybí ID test runu."))),
@@ -191,19 +196,19 @@ export function ExecutionPage() {
   }
 
   if (!selectedRunCase || !displayedCaseAttempt) {
-    return <ErrorState message="Test run neobsahuje žádné test cases nebo execution pokusy." />;
+    return <div className="space-y-4"><Link to="/test-runs" className="text-cyan-700">← Test runy</Link><h2 className="text-xl font-semibold">{run.name}</h2><p>V tomto pokusu zatím nejsou test cases.</p>{run.status !== "archived" && <button className="rounded bg-cyan-700 px-4 py-2 text-white" onClick={() => setProposalMode("new")}>Nový test case v tomto runu</button>}{proposalMode && <RunCaseCreatePanel runId={run.id} onClose={() => setProposalMode(null)} onExecuted={() => { setProposalMode(null); setRefreshKey(n => n + 1); }} />}</div>;
   }
 
   const currentRunCase = selectedRunCase;
   const currentCaseAttempt = displayedCaseAttempt;
   const currentRun = run;
-  const currentSnapshot = snapshotValue(currentRunCase.test_case_snapshot);
+  const currentSnapshot = snapshotValue(currentCaseAttempt.execution_snapshot);
   const displayedTestCase = currentSnapshot ?? {
-    code: currentRunCase.test_case.code,
-    title: currentRunCase.test_case.title,
-    preconditions: currentRunCase.test_case.preconditions,
-    expected_summary: currentRunCase.test_case.expected_summary,
-    steps: currentRunCase.test_case.steps,
+    code: currentRunCase.code,
+    title: "Historický snapshot chybí",
+    preconditions: null,
+    expected_summary: "Původní obsah není doložen. Pro další provedení vyberte konkrétní schválenou verzi.",
+    steps: [],
   };
   const testSteps = displayedTestCase.steps.filter((step) => step.step_type !== "information");
   const stepResultFor = (testStepId: number) =>
@@ -328,6 +333,8 @@ export function ExecutionPage() {
 
   return (
     <div className="space-y-6">
+      {proposalMode && <RunCaseCreatePanel runId={run.id} caseId={proposalMode === "edit" ? currentRunCase.test_case_id : undefined} caseAttemptId={proposalMode === "edit" ? currentCaseAttempt.id : undefined} onClose={() => setProposalMode(null)} onExecuted={() => { setProposalMode(null); setSelectedCaseAttemptId(null); setRefreshKey(n => n + 1); }} />}
+      {versionSelectorOpen && <RunVersionSelector caseId={currentRunCase.test_case_id} attemptId={currentCaseAttempt.id} currentVersionId={currentCaseAttempt.test_case_version_id} onClose={() => setVersionSelectorOpen(false)} onExecuted={() => { setVersionSelectorOpen(false); setSelectedCaseAttemptId(null); setRefreshKey(n => n + 1); }} />}
       <Link to="/test-runs" className="inline-flex items-center gap-2 text-sm font-medium text-cyan-700">
         <ArrowLeft size={16} /> Zpět na test runy
       </Link>
@@ -348,6 +355,8 @@ export function ExecutionPage() {
           </select>
         </label>
         <div className="flex flex-wrap items-center gap-3">
+          <button type="button" disabled={saving || isHistoricalAttempt || run.status === "archived"} className="rounded border border-cyan-700 px-4 py-2 text-sm text-cyan-800 disabled:opacity-50" onClick={() => setProposalMode("new")}>Nový test case v tomto runu</button>
+          <Link className="text-sm text-cyan-700" to={`/test-case-approvals?tab=drafts&origin_run_id=${run.id}`}>Návrhy z tohoto runu</Link>
           {selectedAttempt?.last_step_id ? (
             <span className="text-sm text-slate-500">Poslední krok: {displayedTestCase.steps.find((step) => step.id === selectedAttempt.last_step_id)?.step_order ?? selectedAttempt.last_step_id}</span>
           ) : null}
@@ -372,6 +381,7 @@ export function ExecutionPage() {
         <aside className="rounded-md border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-5 py-4">
             <h2 className="font-semibold">{run.name}</h2>
+            <div className="mt-2 text-xs text-slate-500">Definice v tomto pokusu: {run.definition_counts.approved ?? 0} schválených · {run.definition_counts.unapproved ?? 0} neschválených · {run.definition_counts.rejected ?? 0} zamítnutých · {run.definition_counts.unknown ?? 0} bez doloženého schválení</div>
             <p className="mt-1 text-sm text-slate-500">{run.environment ?? "-"} / {run.version ?? "-"}</p>
             <div className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-600">
               Položka {selectedIndex >= 0 ? selectedIndex + 1 : "-"} z {run.test_run_cases.length}
@@ -435,7 +445,10 @@ export function ExecutionPage() {
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-cyan-700">
                   <span>{displayedTestCase.code}</span>
                   <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">Verze {selectedRunCase.test_case_version}</span>
-                  {currentSnapshot ? <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">Snapshot runu</span> : null}
+                  <span className="text-xs">Verze {currentCaseAttempt.version_number ?? "legacy"}</span>
+                  <ApprovalStatusBadge state={currentCaseAttempt.approval_state} />
+                  <span className="text-xs text-slate-500">Při zahájení: <ApprovalStatusBadge state={currentCaseAttempt.approval_state_at_start ?? currentCaseAttempt.approval_state_at_binding} /></span>
+                  {currentCaseAttempt.closure_reason === "definition_changed" && <span className="text-xs text-amber-800">Pokus ukončen změnou definice</span>}
                 </div>
                 <div className="mt-3 flex flex-wrap items-end gap-2">
                   <label className="min-w-72 text-xs font-medium text-slate-600">
@@ -474,6 +487,7 @@ export function ExecutionPage() {
                 </div>
 
                 <h2 className="mt-1 text-2xl font-semibold">{displayedTestCase.title}</h2>
+                <div className="my-3 flex flex-wrap gap-3 text-sm"><button type="button" disabled={!canResetCase} className="text-cyan-700 disabled:opacity-40" onClick={() => setProposalMode("edit")}>Navrhnout změnu scénáře</button><button type="button" disabled={!canResetCase} className="text-cyan-700 disabled:opacity-40" onClick={() => setVersionSelectorOpen(true)}>Nový pokus s jinou schválenou verzí</button></div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div>
                     <div className="text-xs font-medium uppercase text-slate-500">Tester</div>

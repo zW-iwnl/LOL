@@ -8,8 +8,8 @@ from app.schemas.test_run import UpdateStepResultRequest
 from app.services.common import not_found
 
 
-def _find_snapshot_step(db: Session, run_case: TestRunCase, test_step_id: int) -> dict:
-    snapshot = run_case.test_case_snapshot or {}
+def _find_snapshot_step(db: Session, case_attempt: TestRunCaseAttempt, test_step_id: int) -> dict:
+    snapshot = case_attempt.execution_snapshot or {}
     snapshot_steps = snapshot.get("steps")
     if isinstance(snapshot_steps, list):
         step = next(
@@ -24,14 +24,7 @@ def _find_snapshot_step(db: Session, run_case: TestRunCase, test_step_id: int) -
             raise not_found("Krok test case")
         return step
 
-    step = (
-        db.query(TestStep)
-        .filter(TestStep.id == test_step_id, TestStep.test_case_id == run_case.test_case_id)
-        .first()
-    )
-    if step is None:
-        raise not_found("Krok test case")
-    return {"id": step.id, "step_order": step.step_order, "step_type": step.step_type}
+    raise HTTPException(409, "Historický snapshot chybí. Vyberte konkrétní verzi pro nový pokus.")
 
 
 def update_latest_step_result(
@@ -60,6 +53,11 @@ def update_step_result(
     payload: UpdateStepResultRequest,
     current_user: User,
 ) -> TestRunStepResult:
+    from app.services.run_case_creation import lock_run
+    original = db.get(TestRunCaseAttempt, case_attempt_id)
+    if original is None:
+        raise not_found("Test run case pokus")
+    lock_run(db, original.test_run_case.test_run_id, current_user)
     case_attempt = (
         db.query(TestRunCaseAttempt)
         .filter(TestRunCaseAttempt.id == case_attempt_id)
@@ -106,7 +104,7 @@ def update_step_result(
             detail="Historický nebo dokončený pokus nelze upravovat.",
         )
 
-    step = _find_snapshot_step(db, run_case, test_step_id)
+    step = _find_snapshot_step(db, case_attempt, test_step_id)
     if step.get("step_type", "test") != "test":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,6 +129,8 @@ def update_step_result(
         db.add(step_result)
 
     now = datetime.now(timezone.utc)
+    from app.services.run_case_creation import mark_started
+    mark_started(db, case_attempt, current_user)
     step_result.result = payload.result
     if payload.result == "not_run":
         step_result.executed_by = None

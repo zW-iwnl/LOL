@@ -1,3 +1,4 @@
+from tests.workflow_factories import create_reviewed_case
 from fastapi.testclient import TestClient
 
 from tests.test_auth import login
@@ -23,11 +24,15 @@ def add_child(
     headers: dict[str, str],
     parent_id: int,
     child_id: int,
+    include_descendants: bool = True,
 ) -> dict:
     response = client.post(
         f"/api/suite-groups/{parent_id}/children",
         headers=headers,
-        json={"child_group_id": child_id},
+        json={
+            "child_group_id": child_id,
+            "include_descendants": include_descendants,
+        },
     )
     assert response.status_code == 200
     return response.json()
@@ -91,6 +96,82 @@ def test_duplicate_edge_and_direct_or_indirect_cycles_are_rejected(
         json={"child_group_id": first["id"]},
     )
     assert indirect.status_code == 400
+
+
+def test_child_relation_can_exclude_and_restore_its_descendants(
+    client: TestClient,
+) -> None:
+    headers = auth_headers(client)
+    root = create_group(client, headers, "1111")
+    middle = create_group(client, headers, "2222")
+    leaf = create_group(client, headers, "3333")
+    add_child(client, headers, middle["id"], leaf["id"])
+    root_after_add = add_child(
+        client,
+        headers,
+        root["id"],
+        middle["id"],
+        include_descendants=False,
+    )
+    assert root_after_add["child_relations"][0]["include_descendants"] is False
+
+    middle_suite = create_suite(client, headers, "Suite 2222")
+    leaf_suite = create_suite(client, headers, "Suite 3333")
+    middle_case = create_reviewed_case(client,
+        headers=headers,
+        json={
+            "code": "TC-2222",
+            "title": "Přímý obsah 2222",
+            "suite_id": middle_suite["id"],
+        },
+    ).json()
+    leaf_case = create_reviewed_case(client,
+        headers=headers,
+        json={
+            "code": "TC-3333",
+            "title": "Obsah podskupiny 3333",
+            "suite_id": leaf_suite["id"],
+        },
+    ).json()
+    for group_id, suite_id in (
+        (middle["id"], middle_suite["id"]),
+        (leaf["id"], leaf_suite["id"]),
+    ):
+        assert client.post(
+            f"/api/suite-groups/{group_id}/members",
+            headers=headers,
+            json={"suite_id": suite_id},
+        ).status_code == 201
+
+    root_cases = client.get(
+        f"/api/suite-groups/{root['id']}/test-cases",
+        headers=headers,
+    ).json()
+    assert [item["id"] for item in root_cases] == [middle_case["id"]]
+
+    middle_cases = client.get(
+        f"/api/suite-groups/{middle['id']}/test-cases",
+        headers=headers,
+    ).json()
+    assert {item["id"] for item in middle_cases} == {
+        middle_case["id"],
+        leaf_case["id"],
+    }
+
+    restored = client.put(
+        f"/api/suite-groups/{root['id']}/children/{middle['id']}",
+        headers=headers,
+        json={"include_descendants": True},
+    )
+    assert restored.status_code == 200
+    restored_cases = client.get(
+        f"/api/suite-groups/{root['id']}/test-cases",
+        headers=headers,
+    ).json()
+    assert {item["id"] for item in restored_cases} == {
+        middle_case["id"],
+        leaf_case["id"],
+    }
 
 
 def test_suite_can_belong_to_multiple_groups(client: TestClient) -> None:
@@ -162,8 +243,7 @@ def test_diamond_graph_deduplicates_cases_and_inherited_tags(
         headers=headers,
         json={"category": "business_area", "name": "Platby"},
     ).json()
-    case = client.post(
-        "/api/test-cases",
+    case = create_reviewed_case(client,
         headers=headers,
         json={
             "code": "TC-DIAMOND",
@@ -183,6 +263,38 @@ def test_diamond_graph_deduplicates_cases_and_inherited_tags(
         json={"test_case_ids": [case["id"]]},
     ).status_code == 200
 
+    root_suite = create_suite(client, headers, "Root suite")
+    root_case = create_reviewed_case(client,
+        headers=headers,
+        json={
+            "code": "TC-ROOT-DIRECT",
+            "title": "Přímý obsah kořenové skupiny",
+            "suite_id": root_suite["id"],
+        },
+    ).json()
+    assert client.post(
+        f"/api/suite-groups/{root['id']}/members",
+        headers=headers,
+        json={"suite_id": root_suite["id"]},
+    ).status_code == 201
+
+    direct_response = client.get(
+        f"/api/suite-groups/{root['id']}/test-cases",
+        headers=headers,
+        params={"include_descendants": "false"},
+    )
+    assert direct_response.status_code == 200
+    assert [item["id"] for item in direct_response.json()] == [root_case["id"]]
+
+    recursive_response = client.get(
+        f"/api/suite-groups/{root['id']}/test-cases",
+        headers=headers,
+    )
+    assert recursive_response.status_code == 200
+    recursive_ids = [item["id"] for item in recursive_response.json()]
+    assert set(recursive_ids) == {case["id"], root_case["id"]}
+    assert recursive_ids.count(case["id"]) == 1
+
     root_after = client.get(
         f"/api/suite-groups/{root['id']}",
         headers=headers,
@@ -195,6 +307,25 @@ def test_diamond_graph_deduplicates_cases_and_inherited_tags(
             "test_case_count": 1,
         }
     ]
+
+
+def test_group_test_case_selection_validates_group_and_scope(
+    client: TestClient,
+) -> None:
+    headers = auth_headers(client)
+
+    missing = client.get(
+        "/api/suite-groups/999999/test-cases",
+        headers=headers,
+    )
+    assert missing.status_code == 404
+
+    invalid_scope = client.get(
+        "/api/suite-groups/999999/test-cases",
+        headers=headers,
+        params={"include_descendants": "nevim"},
+    )
+    assert invalid_scope.status_code == 422
 
 
 def test_removed_group_tree_and_audit_endpoints_are_not_available(

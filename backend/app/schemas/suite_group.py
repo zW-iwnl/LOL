@@ -32,6 +32,13 @@ class SuiteGroupTestCaseMemberRead(TimestampFields):
     sort_order: int
 
 
+class SuiteGroupChildRelationRead(TimestampFields):
+    parent_group_id: int
+    child_group_id: int
+    sort_order: int
+    include_descendants: bool
+
+
 class SuiteGroupBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
@@ -52,6 +59,7 @@ class SuiteGroupRead(SuiteGroupBase, TimestampFields):
     id: int
     parent_ids: list[int] = Field(default_factory=list)
     child_ids: list[int] = Field(default_factory=list)
+    child_relations: list[SuiteGroupChildRelationRead] = Field(default_factory=list)
     members: list[SuiteGroupMemberRead] = Field(default_factory=list)
     test_case_members: list[SuiteGroupTestCaseMemberRead] = Field(default_factory=list)
     tags: list[SuiteGroupTagRead] = Field(default_factory=list)
@@ -60,6 +68,11 @@ class SuiteGroupRead(SuiteGroupBase, TimestampFields):
 class SuiteGroupChildCreate(BaseModel):
     child_group_id: int
     sort_order: int = Field(default=0, ge=0)
+    include_descendants: bool = True
+
+
+class SuiteGroupChildUpdate(BaseModel):
+    include_descendants: bool
 
 
 class SuiteGroupParentIdsUpdate(BaseModel):

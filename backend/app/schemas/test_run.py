@@ -61,6 +61,13 @@ class UpdateStepResultRequest(BaseModel):
 
 class TestRunCaseAttemptHistoryRead(TimestampFields):
     id: int
+    execution_snapshot: dict | None = None
+    test_case_version_id: int | None = None
+    version_number: int | None = None
+    approval_state: str = "unknown"
+    approval_state_at_start: str | None = None
+    approval_state_at_binding: str = "unknown"
+    closure_reason: str | None = None
     test_run_attempt_id: int
     test_run_attempt_number: int
     test_run_case_id: int
@@ -145,6 +152,7 @@ class TestRunAttemptRead(TimestampFields):
 
 
 class TestRunExecutionRead(TestRunRead):
+    definition_counts: dict[str, int] = Field(default_factory=dict)
     attempts: list[TestRunAttemptRead] = []
     selected_attempt_id: int
     test_run_cases: list[TestRunCaseExecutionRead] = []

@@ -8,6 +8,8 @@ import { RequirementsPage } from "./pages/RequirementsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TestCaseDetailPage } from "./pages/TestCaseDetailPage";
+import { TestCaseApprovalsPage } from "./pages/TestCaseApprovalsPage";
+import { TestCaseApprovalDetailPage } from "./pages/TestCaseApprovalDetailPage";
 import { TestCasePropertiesPage } from "./pages/TestCasePropertiesPage";
 import { TestCasesPage } from "./pages/TestCasesPage";
 import { ExecutionPage } from "./pages/ExecutionPage";
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="/test-suites" element={<TestSuitesPage />} />
           <Route path="/test-cases" element={<TestCasesPage />} />
           <Route path="/test-cases/:testCaseId" element={<TestCaseDetailPage />} />
+          <Route path="/test-case-approvals" element={<TestCaseApprovalsPage />} />
+          <Route path="/test-case-approvals/:reviewId" element={<TestCaseApprovalDetailPage />} />
           <Route path="/requirements" element={<RequirementsPage />} />
           <Route path="/test-runs" element={<TestRunsPage />} />
           <Route path="/test-runs/:testRunId/execution" element={<ExecutionPage />} />

@@ -2,14 +2,14 @@
 
 Aktualizováno: 2026-09-07
 
-Zdrojem pravdy jsou SQLAlchemy modely v backend/app/models a Alembic migrace 0001 až 0020. Aplikace používá PostgreSQL 16 a jedno globální repository bez projektového dělení.
+Zdrojem pravdy jsou SQLAlchemy modely v backend/app/models a Alembic migrace 0001 až 0021. Aplikace používá PostgreSQL 16 a jedno globální repository bez projektového dělení.
 
 ## Organizační model repository
 
 Repository má pouze jednu hierarchickou vrstvu: SuiteGroup.
 
 - SuiteGroup tvoří orientovaný acyklický graf a může mít více rodičů.
-- Hrany grafu jsou v suite_group_relations.
+- Hrany grafu jsou v suite_group_relations; include_descendants určuje, zda se konkrétní cesta rozvine i do potomků vložené skupiny.
 - TestSuite je plochý kontejner bez parent_suite_id, path a level.
 - Test suite může být členem více skupin přes suite_group_members.
 - Test case povinně patří právě do jedné test suite.
@@ -22,7 +22,7 @@ Repository má pouze jednu hierarchickou vrstvu: SuiteGroup.
 |---|---|---|
 | users | uživatelé a přihlášení | unikátní email |
 | suite_groups | uzly organizačního DAG | nezáporné sort_order |
-| suite_group_relations | orientované hrany DAG | PK rodič/potomek, zákaz self-edge, indexy v obou směrech |
+| suite_group_relations | orientované hrany DAG | PK rodič/potomek, zákaz self-edge, volitelný průchod do potomků, indexy v obou směrech |
 | test_suites | ploché kontejnery test cases | povinný autor, nezáporné sort_order |
 | suite_group_members | M:N skupiny a suity | složený PK, reverse index podle suite |
 | suite_group_test_case_members | přímé M:N členství cases ve skupinách | složený PK, reverse index podle case |

@@ -1,3 +1,4 @@
+from tests.workflow_factories import create_reviewed_case
 from fastapi.testclient import TestClient
 
 from tests.test_auth import login
@@ -26,8 +27,7 @@ def create_case(
     *,
     tag_ids: list[int] | None = None,
 ) -> dict:
-    response = client.post(
-        "/api/test-cases",
+    response = create_reviewed_case(client,
         headers=auth,
         json={
             "code": code,
@@ -36,7 +36,7 @@ def create_case(
             "tag_ids": tag_ids or [],
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 200
     return response.json()
 
 

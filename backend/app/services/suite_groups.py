@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
@@ -26,17 +26,19 @@ def group_descendants_cte():
     descendants = select(
         SuiteGroup.id.label("ancestor_id"),
         SuiteGroup.id.label("descendant_id"),
+        literal(True).label("can_expand"),
     ).cte("group_descendants", recursive=True)
     return descendants.union(
         select(
             descendants.c.ancestor_id,
             SuiteGroupRelation.child_group_id,
+            SuiteGroupRelation.include_descendants.label("can_expand"),
         ).select_from(
             descendants.join(
                 SuiteGroupRelation,
                 SuiteGroupRelation.parent_group_id == descendants.c.descendant_id,
             )
-        )
+        ).where(descendants.c.can_expand.is_(True))
     )
 
 
@@ -62,6 +64,52 @@ def group_test_cases_cte():
         ).join(TestCase, TestCase.suite_id == SuiteGroupMember.suite_id)
     )
     return explicit_cases.union(suite_cases).cte("group_test_cases")
+
+
+def list_group_test_cases(
+    db: Session,
+    group_id: int,
+    include_descendants: bool = True,
+) -> list[TestCase]:
+    """Return the distinct test cases selected by a group at the requested scope."""
+    if db.get(SuiteGroup, group_id) is None:
+        raise not_found("Skupina suit")
+
+    if include_descendants:
+        descendants = group_descendants_cte()
+        selected_group_ids = select(descendants.c.descendant_id).where(
+            descendants.c.ancestor_id == group_id
+        )
+    else:
+        selected_group_ids = select(SuiteGroup.id).where(SuiteGroup.id == group_id)
+
+    explicit_cases = select(
+        SuiteGroupTestCaseMember.test_case_id.label("test_case_id")
+    ).where(SuiteGroupTestCaseMember.group_id.in_(selected_group_ids))
+    suite_cases = (
+        select(TestCase.id.label("test_case_id"))
+        .join(SuiteGroupMember, SuiteGroupMember.suite_id == TestCase.suite_id)
+        .where(SuiteGroupMember.group_id.in_(selected_group_ids))
+    )
+    selected_case_ids = explicit_cases.union(suite_cases).cte(
+        "selected_group_test_cases"
+    )
+
+    return (
+        db.query(TestCase)
+        .options(
+            selectinload(TestCase.steps),
+            selectinload(TestCase.tag_assignments).selectinload(
+                TestCaseTagAssignment.tag
+            ),
+        )
+        .join(
+            selected_case_ids,
+            selected_case_ids.c.test_case_id == TestCase.id,
+        )
+        .order_by(TestCase.code, TestCase.id)
+        .all()
+    )
 
 
 def group_tags_by_id(
@@ -244,6 +292,7 @@ def add_child(
     parent_group_id: int,
     child_group_id: int,
     sort_order: int = 0,
+    include_descendants: bool = True,
 ) -> SuiteGroup:
     _lock_graph(db)
     _validate_group_ids(db, [parent_group_id, child_group_id])
@@ -262,8 +311,23 @@ def add_child(
             parent_group_id=parent_group_id,
             child_group_id=child_group_id,
             sort_order=sort_order,
+            include_descendants=include_descendants,
         )
     )
+    db.commit()
+    return get_group(db, parent_group_id)
+
+
+def update_child(
+    db: Session,
+    parent_group_id: int,
+    child_group_id: int,
+    include_descendants: bool,
+) -> SuiteGroup:
+    relation = db.get(SuiteGroupRelation, (parent_group_id, child_group_id))
+    if relation is None:
+        raise not_found("Vazba skupin")
+    relation.include_descendants = include_descendants
     db.commit()
     return get_group(db, parent_group_id)
 
@@ -296,6 +360,10 @@ def set_group_parents(
         .filter(SuiteGroupRelation.child_group_id == group_id)
         .all()
     }
+    current_scope = {
+        parent_group_id: relation.include_descendants
+        for parent_group_id, relation in current.items()
+    }
     for relation in current.values():
         db.delete(relation)
     db.flush()
@@ -312,6 +380,7 @@ def set_group_parents(
                 parent_group_id=parent_group_id,
                 child_group_id=group_id,
                 sort_order=sort_order,
+                include_descendants=current_scope.get(parent_group_id, True),
             )
         )
         db.flush()

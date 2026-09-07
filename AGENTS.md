@@ -55,13 +55,14 @@ První verze musí obsahovat:
 - Aplikace používá jedno globální repository bez projektového dělení.
 - TestSuite je plochá entita bez parent_suite_id, path a level.
 - SuiteGroup tvoří jedinou hierarchickou vrstvu repository a může mít více rodičů (DAG).
-- Vazby SuiteGroupRelation nesmí vytvářet cykly.
+- Vazby SuiteGroupRelation nesmí vytvářet cykly a volbou include_descendants řídí, zda dané umístění skupiny pokračuje do jejích potomků.
 - TestSuite může být členem více SuiteGroup.
 - TestCase povinně patří právě do jedné TestSuite a může být zároveň explicitním členem více SuiteGroup.
 - TestRun obsahuje sadu TestRunCase položek; dvojice test_run_id a test_case_id je unikátní.
-- TestRunCase drží aktuální výsledek a neměnný snapshot konkrétního test case.
+- TestCase má publikovanou projekci, samostatný editovatelný TestCaseDraft a neměnné TestCaseVersion; publikace vyžaduje nezávislé review.
+- TestRunCase drží aktuální výsledek; přesnou verzi a neměnný execution snapshot drží každý TestRunCaseAttempt. Legacy snapshot na TestRunCase slouží pro migraci.
 - Historické TestRunCase a jejich attempts se při odstranění zdrojového TestCase nemažou.
-- TestCase použitý v test runu se místo fyzického smazání označí jako deprecated.
+- TestCase se při vyřazení označí jako deprecated; jeho návrhy, verze a execution historie se fyzicky nemažou.
 
 ## Status hodnoty
 TestCase status:

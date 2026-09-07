@@ -1,0 +1,91 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const authorEmail = process.env.TEST_MANAGER_EMAIL ?? "admin@testmanager.cz";
+const authorPassword = process.env.TEST_MANAGER_PASSWORD ?? "admin123";
+const reviewerEmail = process.env.TEST_MANAGER_REVIEWER_EMAIL;
+const reviewerPassword = process.env.TEST_MANAGER_REVIEWER_PASSWORD;
+
+async function login(page: Page, email: string, password: string) {
+  await page.goto("/login");
+  await page.getByLabel(/e-?mail/i).fill(email);
+  await page.getByLabel(/heslo|password/i).fill(password);
+  await page.getByRole("button", { name: /přihlásit|login/i }).click();
+  await expect(page).toHaveURL(/dashboard/);
+}
+
+test("run-origin scenario is frozen, reviewed by another user and keeps its first snapshot", async ({ page, browser }) => {
+  test.skip(!reviewerEmail || !reviewerPassword, "Je nutný druhý nezávislý aktivní reviewer (TEST_MANAGER_REVIEWER_EMAIL/PASSWORD).");
+  await login(page, authorEmail, authorPassword);
+  const token = await page.evaluate(() => localStorage.getItem("test-manager-token"));
+  const headers = { Authorization: `Bearer ${token}` };
+  const suitesResponse = await page.request.get("/api/test-suites", { headers });
+  expect(suitesResponse.ok()).toBeTruthy();
+  const suites = await suitesResponse.json();
+  const suite = suites.find((s: { is_active: boolean }) => s.is_active);
+  expect(suite).toBeTruthy();
+  const runResponse = await page.request.post("/api/test-runs", { headers, data: { name: `Approval E2E ${Date.now()}` } });
+  expect(runResponse.ok()).toBeTruthy();
+  const run = await runResponse.json();
+  await page.goto(`/test-runs/${run.id}/execution`);
+  await page.getByRole("button", { name: "Nový test case v tomto runu", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Test suita", exact: true }).selectOption(String(suite.id));
+  const title = `Nový scénář z runu ${Date.now()}`;
+  await dialog.getByLabel("Název scénáře", { exact: true }).fill(title);
+  await dialog.getByRole("button", { name: "Uložit nový návrh", exact: true }).click();
+  await dialog.getByRole("button", { name: "Přidat krok", exact: true }).click();
+  await dialog.getByLabel("Akce", { exact: true }).fill("Otevřít formulář");
+  await dialog.getByLabel("Očekávaný výsledek", { exact: true }).fill("Formulář se zobrazí");
+  await dialog.getByLabel("Důvod změny / zavedení scénáře").fill("Scénář objevený při testování");
+  await dialog.getByRole("button", { name: "Přidat a provést", exact: true }).click();
+  await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "CHYBA", exact: true }).click();
+  const beforeResponse = await page.request.get(`/api/test-runs/${run.id}/execution`, { headers });
+  const before = (await beforeResponse.json()).test_run_cases[0];
+  await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Odeslat ke schválení", exact: true }).click();
+  const reviewLink = page.getByRole("dialog").getByRole("link", { name: "Otevřít schvalování", exact: true });
+  await expect(reviewLink).toHaveAttribute("href", /test-case-approvals\/\d+/);
+  const reviewPath = await reviewLink.getAttribute("href");
+  const reviewerContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const reviewerPage = await reviewerContext.newPage();
+    await login(reviewerPage, reviewerEmail!, reviewerPassword!);
+    await reviewerPage.goto(reviewPath!);
+    await reviewerPage.getByRole("button", { name: "Převzít ke schválení", exact: true }).click();
+    await reviewerPage.getByLabel(/Důvod rozhodnutí/).fill("Upřesněte název scénáře a opravte očekávání.");
+    await reviewerPage.getByRole("button", { name: "Vrátit k dopracování", exact: true }).click();
+    await expect(reviewerPage.getByText("K dopracování", { exact: true })).toBeVisible();
+    await page.goto(`/test-runs/${run.id}/execution`);
+    await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
+    const correctedTitle = `${title} · opraveno`;
+    await page.getByRole("dialog").getByLabel("Název scénáře", { exact: true }).fill(correctedTitle);
+    await page.getByRole("dialog").getByRole("textbox", { name: "Očekávaný výsledek", exact: true }).fill("Formulář zobrazí všechna povinná pole");
+    await page.getByRole("dialog").getByRole("button", { name: "Provést upravenou verzi", exact: true }).click();
+    await expect(page.getByRole("heading", { name: correctedTitle, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Odeslat ke schválení", exact: true }).click();
+    const secondReviewLink = page.getByRole("dialog").getByRole("link", { name: "Otevřít schvalování", exact: true });
+    await expect(secondReviewLink).toHaveAttribute("href", /test-case-approvals\/\d+/);
+    const secondReviewPath = await secondReviewLink.getAttribute("href");
+    expect(secondReviewPath).not.toBe(reviewPath);
+    await reviewerPage.goto(secondReviewPath!);
+    await reviewerPage.getByRole("button", { name: "Převzít ke schválení", exact: true }).click();
+    await reviewerPage.getByRole("button", { name: "Schválit a publikovat", exact: true }).click();
+    await expect(reviewerPage.getByText("Schváleno", { exact: true })).toBeVisible();
+    const afterResponse = await page.request.get(`/api/test-runs/${run.id}/execution`, { headers });
+    const after = (await afterResponse.json()).test_run_cases[0];
+    expect(after.test_case_snapshot.title).toBe(correctedTitle);
+    expect(after.case_attempts).toHaveLength(2);
+    expect(after.case_attempts[0].execution_snapshot).toEqual(before.test_case_snapshot);
+    expect(after.case_attempts[0].test_case_version_id).toBe(before.case_attempts[0].test_case_version_id);
+    expect(after.case_attempts[0].approval_state).toBe("changes_requested");
+    expect(after.case_attempts[0].step_results[0].result).toBe("failed");
+    expect(after.case_attempts[1].approval_state).toBe("approved");
+    expect(after.case_attempts[1].version_number).toBe(2);
+    expect(after.case_attempts[1].step_results[0].result).toBe("not_run");
+  } finally { await reviewerContext.close(); }
+});

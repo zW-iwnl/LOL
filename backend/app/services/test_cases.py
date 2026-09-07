@@ -114,19 +114,17 @@ def _set_tag_assignments(test_case: TestCase, tag_ids: list[int]) -> None:
 
 
 def create_test_case(db: Session, payload: TestCaseCreate, current_user: User) -> TestCase:
-    _validate_suite(db, payload.suite_id)
-    tag_ids = _requested_tag_ids(db, payload) or []
-    if db.query(TestCase).filter(TestCase.code == payload.code).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód test case už existuje.")
-    data = payload.model_dump(exclude={"steps", *TAG_INPUT_FIELDS})
-    test_case = TestCase(**data, created_by=current_user.id)
-    _set_tag_assignments(test_case, tag_ids)
-    db.add(test_case)
-    db.flush()
-    for step in payload.steps:
-        db.add(TestStep(**step.model_dump(), test_case_id=test_case.id))
+    from app.schemas.test_case_workflow import ProposalCreate, DraftContent
+    from app.services.test_case_versions import create_proposal
+    if payload.status != "draft":
+        raise HTTPException(422, "Nový test case vzniká jako návrh. Stav ready získá až schválením.")
+    content = payload.model_dump(exclude={"suite_id", "code", "status"})
+    content["tag_ids"] = _requested_tag_ids(db, payload) or []
+    draft = create_proposal(db, ProposalCreate(suite_id=payload.suite_id, code=payload.code,
+                                               content=DraftContent.model_validate(content)), current_user)
     db.commit()
-    return get_test_case(db, test_case.id)
+    return get_test_case(db, draft.test_case_id)
+
 
 
 def update_test_case(
@@ -135,114 +133,36 @@ def update_test_case(
     payload: TestCaseUpdate,
     current_user: User | None = None,
 ) -> TestCase:
-    test_case = get_test_case(db, test_case_id)
-    requested_tag_ids = _requested_tag_ids(db, payload)
-    if "suite_id" in payload.model_fields_set and payload.suite_id is not None:
+    if payload.model_fields_set == {"suite_id"}:
+        from app.services.test_case_versions import lock_case, event
+        case = lock_case(db, test_case_id)
         _validate_suite(db, payload.suite_id)
-    if payload.code and payload.code != test_case.code:
-        existing = db.query(TestCase).filter(
-            TestCase.code == payload.code,
-            TestCase.id != test_case_id,
-        ).first()
-        if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kód test case už existuje.")
+        case.suite_id = payload.suite_id
+        if current_user:
+            event(db, case.id, current_user, "suite_moved", suite_id=payload.suite_id)
+        db.commit()
+        return get_test_case(db, case.id)
+    raise HTTPException(409, "Obsah se upravuje v návrhu nové verze, nikoli přímo. Otevřete detail test case a návrh.")
 
-    updates = payload.model_dump(exclude_unset=True, exclude=TAG_INPUT_FIELDS)
-    changed = any(getattr(test_case, field) != value for field, value in updates.items())
-    tags_changed = (
-        requested_tag_ids is not None
-        and set(requested_tag_ids) != set(test_case.tag_ids)
-    )
-    if changed or tags_changed:
-        test_case.version += 1
-    for field, value in updates.items():
-        setattr(test_case, field, value)
-    if requested_tag_ids is not None:
-        _set_tag_assignments(test_case, requested_tag_ids)
-    db.commit()
-    return get_test_case(db, test_case.id)
 
 
 def delete_test_case(db: Session, test_case_id: int) -> None:
-    test_case = get_test_case(db, test_case_id)
-    has_execution_history = (
-        db.query(TestRunCase.id)
-        .filter(TestRunCase.test_case_id == test_case_id)
-        .first()
-        is not None
-    )
-    if has_execution_history or test_case.status != "draft":
-        test_case.status = "deprecated"
-    else:
-        db.delete(test_case)
+    from app.services.test_case_versions import lock_case
+    test_case = lock_case(db, test_case_id)
+    test_case.status = "deprecated"
     db.commit()
+
 
 
 def create_step(db: Session, test_case_id: int, payload: TestStepCreate, current_user: User | None = None) -> TestStep:
-    test_case = get_test_case(db, test_case_id)
-    duplicate_order = (
-        db.query(TestStep.id)
-        .filter(
-            TestStep.test_case_id == test_case_id,
-            TestStep.step_order == payload.step_order,
-        )
-        .first()
-    )
-    if duplicate_order is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Pořadí kroku už je v test case použité.",
-        )
-    test_case.version += 1
-    step = TestStep(**payload.model_dump(), test_case_id=test_case_id)
-    db.add(step)
-    db.flush()
-    db.commit()
-    db.refresh(step)
-    return step
+    raise HTTPException(409, "Kroky upravujte atomicky v návrhu nové verze.")
+
 
 
 def update_step(db: Session, step_id: int, payload: TestStepUpdate, current_user: User | None = None) -> TestStep:
-    step = db.get(TestStep, step_id)
-    if step is None:
-        raise not_found("Test step")
-    test_case = get_test_case(db, step.test_case_id)
-    if payload.step_order is not None and payload.step_order != step.step_order:
-        duplicate_order = (
-            db.query(TestStep.id)
-            .filter(
-                TestStep.test_case_id == step.test_case_id,
-                TestStep.step_order == payload.step_order,
-                TestStep.id != step.id,
-            )
-            .first()
-        )
-        if duplicate_order is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Pořadí kroku už je v test case použité.",
-            )
-    changes = {}
-    for field, new_value in payload.model_dump(exclude_unset=True).items():
-        old_value = getattr(step, field)
-        if old_value != new_value:
-            changes[field] = {"from": old_value, "to": new_value}
-    if changes:
-        test_case.version += 1
-    apply_updates(step, payload)
-    if payload.step_type == "information":
-        step.expected_result = None
-        step.test_data = None
-    db.commit()
-    db.refresh(step)
-    return step
+    raise HTTPException(409, "Kroky upravujte atomicky v návrhu nové verze.")
+
 
 
 def delete_step(db: Session, step_id: int, current_user: User | None = None) -> None:
-    step = db.get(TestStep, step_id)
-    if step is None:
-        raise not_found("Test step")
-    test_case = get_test_case(db, step.test_case_id)
-    test_case.version += 1
-    db.delete(step)
-    db.commit()
+    raise HTTPException(409, "Kroky upravujte atomicky v návrhu nové verze.")

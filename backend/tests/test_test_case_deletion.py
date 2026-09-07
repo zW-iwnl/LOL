@@ -1,13 +1,14 @@
 from fastapi.testclient import TestClient
 
 from tests.test_auth import login
+from tests.workflow_factories import create_reviewed_case
 
 
 def auth_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login(client)}"}
 
 
-def test_delete_test_case_removes_case_from_repository(client: TestClient) -> None:
+def test_delete_draft_archives_identity_and_retains_proposal(client: TestClient) -> None:
     headers = auth_headers(client)
     create_response = client.post(
         "/api/test-cases",
@@ -34,16 +35,15 @@ def test_delete_test_case_removes_case_from_repository(client: TestClient) -> No
     delete_response = client.delete(f"/api/test-cases/{test_case_id}", headers=headers)
 
     assert delete_response.status_code == 204
-    assert client.get(f"/api/test-cases/{test_case_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/test-cases/{test_case_id}", headers=headers).json()["status"] == "deprecated"
     repository_response = client.get("/api/test-cases", headers=headers)
     assert repository_response.status_code == 200
-    assert test_case_id not in {item["id"] for item in repository_response.json()}
+    assert test_case_id not in {item["id"] for item in repository_response.json() if item["status"] == "ready"}
 
 
 def test_delete_used_test_case_archives_case_and_preserves_history(client: TestClient) -> None:
     headers = auth_headers(client)
-    create_response = client.post(
-        "/api/test-cases",
+    create_response = create_reviewed_case(client,
         headers=headers,
         json={
             "suite_id": 1,
@@ -60,7 +60,7 @@ def test_delete_used_test_case_archives_case_and_preserves_history(client: TestC
             ],
         },
     )
-    assert create_response.status_code == 201
+    assert create_response.status_code == 200
     test_case_id = create_response.json()["id"]
 
     requirement_response = client.post(
@@ -103,8 +103,7 @@ def test_delete_unused_ready_case_archives_instead_of_hard_delete(
     client: TestClient,
 ) -> None:
     headers = auth_headers(client)
-    create_response = client.post(
-        "/api/test-cases",
+    create_response = create_reviewed_case(client,
         headers=headers,
         json={
             "suite_id": 1,
@@ -113,7 +112,7 @@ def test_delete_unused_ready_case_archives_instead_of_hard_delete(
             "status": "ready",
         },
     )
-    assert create_response.status_code == 201
+    assert create_response.status_code == 200
     test_case_id = create_response.json()["id"]
 
     delete_response = client.delete(f"/api/test-cases/{test_case_id}", headers=headers)

@@ -1,3 +1,4 @@
+from tests.workflow_factories import create_reviewed_case
 from fastapi.testclient import TestClient
 
 from tests.test_test_runs import (
@@ -63,8 +64,7 @@ def test_archived_run_rejects_step_result_update(client: TestClient) -> None:
 
 def test_information_step_has_note_and_is_not_executable(client: TestClient) -> None:
     headers = auth_headers(client)
-    case_response = client.post(
-        "/api/test-cases",
+    case_response = create_reviewed_case(client,
         headers=headers,
         json={
             "suite_id": 1,
@@ -89,7 +89,7 @@ def test_information_step_has_note_and_is_not_executable(client: TestClient) -> 
             ],
         },
     )
-    assert case_response.status_code == 201
+    assert case_response.status_code == 200
     test_case = case_response.json()
     information_step, test_step = test_case["steps"]
     assert information_step["step_type"] == "information"
@@ -106,9 +106,8 @@ def test_information_step_has_note_and_is_not_executable(client: TestClient) -> 
             "expected_result": "Stále se má ignorovat",
         },
     )
-    assert update_step_response.status_code == 200
-    information_step = update_step_response.json()
-    assert information_step["note"] == "Aktualizovaná poznámka"
+    assert update_step_response.status_code == 409
+    assert information_step["note"] == "Důležitá poznámka"
     assert information_step["expected_result"] is None
 
     test_run = create_test_run(client, headers)
@@ -117,7 +116,7 @@ def test_information_step_has_note_and_is_not_executable(client: TestClient) -> 
     assert [item["test_step_id"] for item in run_case["step_results"]] == [test_step["id"]]
     snapshot_steps = run_case["test_case_snapshot"]["steps"]
     assert snapshot_steps[0]["step_type"] == "information"
-    assert snapshot_steps[0]["note"] == "Aktualizovaná poznámka"
+    assert snapshot_steps[0]["note"] == "Důležitá poznámka"
 
     result_response = client.put(
         f"/api/test-run-cases/{run_case['id']}/steps/{information_step['id']}/result",

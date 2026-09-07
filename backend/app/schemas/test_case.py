@@ -88,6 +88,8 @@ class TestCaseUpdate(BaseModel):
 
 class TestCaseRead(TestCaseBase, TimestampFields):
     id: int
+    current_approved_version_id: int | None = None
+    origin_run_id: int | None = None
     version: int
     created_by: int
     steps: list[TestStepRead] = []

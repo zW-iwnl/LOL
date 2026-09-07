@@ -30,8 +30,8 @@ export type TraceabilityRow = {
   requirement_title: string;
   requirement_priority: string;
   requirement_status: string;
-  test_cases: Array<{ id: number; code: string; title: string; status: string }>;
-  coverage_status: "covered" | "missing_tests";
+  test_cases: Array<{ id: number; code: string; title: string; status: string; published_version_id?: number | null; latest_tested_version_id?: number | null; latest_tested_version_number?: number | null; latest_result?: string | null }>;
+  coverage_status: "covered" | "proposed" | "missing_tests";
   risk_status: "missing_tests" | "failing" | "partial" | "verified";
   tested_case_count: number;
   failed_case_count: number;

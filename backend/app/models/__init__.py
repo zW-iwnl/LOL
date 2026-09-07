@@ -1,5 +1,6 @@
 from app.models.requirement import Requirement
 from app.models.test_case import TestCase
+from app.models.test_case_version import TestCaseDraft, TestCaseVersion, TestCaseReview, TestCaseReviewComment, TestCaseEvent, TestCaseOperation, TestCaseVersionTag
 from app.models.test_case_tag import TestCaseTag, TestCaseTagAssignment
 from app.models.suite_group import (
     SuiteGroup,
@@ -23,6 +24,13 @@ __all__ = [
     "SuiteGroupRelation",
     "SuiteGroupTestCaseMember",
     "TestCase",
+    "TestCaseDraft",
+    "TestCaseVersion",
+    "TestCaseVersionTag",
+    "TestCaseReview",
+    "TestCaseReviewComment",
+    "TestCaseEvent",
+    "TestCaseOperation",
     "TestCaseTag",
     "TestCaseTagAssignment",
     "TestRun",

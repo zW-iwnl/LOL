@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -64,6 +64,10 @@ class SuiteGroup(TimestampMixin, Base):
     def child_ids(self) -> list[int]:
         return [relation.child_group_id for relation in self.outgoing_relations]
 
+    @property
+    def child_relations(self) -> list["SuiteGroupRelation"]:
+        return self.outgoing_relations
+
 
 class SuiteGroupRelation(TimestampMixin, Base):
     __tablename__ = "suite_group_relations"
@@ -92,6 +96,12 @@ class SuiteGroupRelation(TimestampMixin, Base):
         primary_key=True,
     )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    include_descendants: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
 
     parent_group = relationship(
         "SuiteGroup",

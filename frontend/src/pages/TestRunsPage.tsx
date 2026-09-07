@@ -238,7 +238,7 @@ export function TestRunsPage() {
   }, [allRuns]);
 
   const assignedCaseIds = new Set((selectedRunLatest?.test_run_cases ?? []).map((runCase) => runCase.test_case_id));
-  const availableTestCases = testCases.filter((testCase) => !assignedCaseIds.has(testCase.id));
+  const availableTestCases = testCases.filter((testCase) => testCase.status === "ready" && testCase.current_approved_version_id && !assignedCaseIds.has(testCase.id));
   const filteredAvailableTestCases = availableTestCases.filter((testCase) => {
     const normalizedQuery = caseQuery.trim().toLowerCase();
     const matchesQuery = !normalizedQuery || `${testCase.code} ${testCase.title}`.toLowerCase().includes(normalizedQuery);

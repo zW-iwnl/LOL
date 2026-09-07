@@ -84,7 +84,12 @@ def update_tag(db: Session, tag_id: int, payload: TestCaseTagUpdate) -> TestCase
 
 
 def delete_tag(db: Session, tag_id: int) -> None:
+    from app.models import TestCaseVersionTag, TestCaseDraft
     tag = get_tag(db, tag_id)
+    if db.query(TestCaseVersionTag.version_id).filter(TestCaseVersionTag.tag_id == tag_id).first():
+        raise HTTPException(409, "Tag je součástí neměnné verze a nelze jej odstranit.")
+    if any(tag_id in d.content.get("tag_ids", []) for d in db.query(TestCaseDraft).filter(TestCaseDraft.status.in_(["open", "submitted"]))):
+        raise HTTPException(409, "Tag používá otevřený návrh test case.")
     in_use = db.query(TestCaseTagAssignment.test_case_id).filter(
         TestCaseTagAssignment.tag_id == tag_id
     ).first()

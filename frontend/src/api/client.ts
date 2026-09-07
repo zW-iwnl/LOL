@@ -78,6 +78,15 @@ export type SuiteGroupTestCaseMember = {
   updated_at: string;
 };
 
+export type SuiteGroupChildRelation = {
+  parent_group_id: number;
+  child_group_id: number;
+  sort_order: number;
+  include_descendants: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SuiteGroupTag = {
   id: number;
   category: TestCaseTagCategory;
@@ -89,6 +98,7 @@ export type SuiteGroup = {
   id: number;
   parent_ids: number[];
   child_ids: number[];
+  child_relations: SuiteGroupChildRelation[];
   name: string;
   description: string | null;
   sort_order: number;
@@ -120,6 +130,8 @@ export type TestStep = {
 
 export type TestCase = {
   id: number;
+  current_approved_version_id?: number | null;
+  origin_run_id?: number | null;
   suite_id: number;
   code: string;
   title: string;
@@ -349,6 +361,13 @@ export function getSuiteGroups() {
   return request<SuiteGroup[]>("/suite-groups");
 }
 
+export function getSuiteGroupTestCases(groupId: number, includeDescendants = true) {
+  const params = new URLSearchParams({
+    include_descendants: String(includeDescendants),
+  });
+  return request<TestCase[]>(`/suite-groups/${groupId}/test-cases?${params}`);
+}
+
 export function createSuiteGroup(payload: SuiteGroupPayload) {
   return request<SuiteGroup>("/suite-groups", {
     method: "POST",
@@ -367,10 +386,30 @@ export function deleteSuiteGroup(groupId: number) {
   return request<void>(`/suite-groups/${groupId}`, { method: "DELETE" });
 }
 
-export function addSuiteGroupChild(parentGroupId: number, childGroupId: number, sortOrder = 0) {
+export function addSuiteGroupChild(
+  parentGroupId: number,
+  childGroupId: number,
+  includeDescendants = true,
+  sortOrder = 0,
+) {
   return request<SuiteGroup>(`/suite-groups/${parentGroupId}/children`, {
     method: "POST",
-    body: JSON.stringify({ child_group_id: childGroupId, sort_order: sortOrder }),
+    body: JSON.stringify({
+      child_group_id: childGroupId,
+      sort_order: sortOrder,
+      include_descendants: includeDescendants,
+    }),
+  });
+}
+
+export function updateSuiteGroupChildScope(
+  parentGroupId: number,
+  childGroupId: number,
+  includeDescendants: boolean,
+) {
+  return request<SuiteGroup>(`/suite-groups/${parentGroupId}/children/${childGroupId}`, {
+    method: "PUT",
+    body: JSON.stringify({ include_descendants: includeDescendants }),
   });
 }
 

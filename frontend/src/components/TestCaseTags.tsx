@@ -39,8 +39,8 @@ export function MultiTagSelect({
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("click", closeOnOutsideClick);
+    return () => document.removeEventListener("click", closeOnOutsideClick);
   }, [open]);
 
   function toggle(tagId: number) {

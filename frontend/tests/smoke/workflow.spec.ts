@@ -5,9 +5,12 @@ const password = process.env.TEST_MANAGER_PASSWORD ?? "admin123";
 
 async function assertNoConsoleErrors(page: Page) {
   const errors: string[] = [];
+  page.on("response", response => {
+    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+  });
   page.on("console", (message) => {
     if (message.type() === "error") {
-      errors.push(message.text());
+      errors.push(`${message.text()} ${message.location().url}`);
     }
   });
   page.on("pageerror", (error) => errors.push(error.message));
@@ -30,6 +33,12 @@ test("main QA workflow is navigable", async ({ page }) => {
 
   await page.getByRole("link", { name: /repository/i }).click();
   await expect(page.getByRole("heading", { name: "Repository", exact: true }).first()).toBeVisible();
+  const businessAreaFilter = page.getByRole("group", { name: "Business oblast" });
+  await expect(businessAreaFilter).toBeVisible();
+  await expect(page.getByRole("group", { name: "Aplikace/doména" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Objekt" })).toBeVisible();
+  await businessAreaFilter.getByRole("button", { name: "Vyhledat business oblast" }).click();
+  await expect(businessAreaFilter.getByRole("searchbox", { name: "Hledat v business oblast" })).toBeVisible();
   await page.getByRole("tab", { name: /Test cases/ }).click();
   await expect(page.getByRole("button", { name: /nový test case/i })).toBeVisible();
 
@@ -79,10 +88,11 @@ test("repository search opens the matching case and reveals the matching suite",
   await expect(testCaseResult).toBeVisible();
   await testCaseResult.click();
   await expect(page).toHaveURL(/\/test-cases\/\d+/);
-  await expect(page.getByRole("heading", { name: "Přihlášení platného uživatele", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Přihlášení platného uživatele/ })).toBeVisible();
 
-  await page.getByRole("link", { name: /repository/i }).click();
+  await page.getByRole("link", { name: "Repository", exact: true }).click();
   await page.getByLabel("Hledat v repository").fill("Checkout");
+  await page.getByRole("button", { name: "Suity", exact: true }).click();
   const suiteResult = page.getByRole("button", { name: /^Checkout\b/i });
   await expect(suiteResult).toBeVisible();
   await suiteResult.click();
@@ -99,7 +109,12 @@ test("repository group workspace, dialog and mobile navigation are operable", as
   await page.getByRole("link", { name: /repository/i }).click();
 
   await expect(page.getByRole("tab", { name: /Skupiny/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("navigation", { name: "Hierarchie skupin" })).toBeVisible();
+  const groupNavigation = page.getByRole("navigation", { name: "Hierarchie skupin" });
+  await expect(groupNavigation).toBeVisible();
+  await groupNavigation.getByRole("button").first().click();
+  await expect(
+    page.getByRole("checkbox", { name: "Zahrnout podskupiny přidávané skupiny" }),
+  ).toBeVisible();
   await page.getByRole("tab", { name: /Test suity/ }).click();
   await expect(page.getByRole("heading", { name: "Ploché test suity" })).toBeVisible();
   await page.getByRole("button", { name: "Nová test suite" }).click();

@@ -42,6 +42,10 @@ class RequirementLinkTestCasesRequest(BaseModel):
 
 class TraceabilityTestCase(BaseModel):
     id: int
+    published_version_id: int | None = None
+    latest_tested_version_id: int | None = None
+    latest_tested_version_number: int | None = None
+    latest_result: str | None = None
     code: str
     title: str
     status: str

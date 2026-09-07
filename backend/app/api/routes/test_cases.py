@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.test_case import TestCaseCreate, TestCaseRead, TestCaseUpdate, TestStepCreate, TestStepRead, TestStepUpdate
@@ -40,7 +40,9 @@ def update_test_case(test_case_id: int, payload: TestCaseUpdate, db: DbSession, 
 
 
 @router.delete("/test-cases/{test_case_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_test_case(test_case_id: int, db: DbSession) -> Response:
+def delete_test_case(test_case_id: int, db: DbSession, current_user: CurrentUser) -> Response:
+    if current_user.role not in {"test_lead", "admin"}:
+        raise HTTPException(403, "Vyřazovat scénáře může pouze vedoucí nebo admin.")
     test_case_service.delete_test_case(db, test_case_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

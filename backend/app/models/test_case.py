@@ -24,6 +24,10 @@ class TestCase(TimestampMixin, Base):
     automated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    current_approved_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("test_case_versions.id", use_alter=True, name="fk_case_published_version"), nullable=True)
+    next_version_number: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    origin_run_id: Mapped[int | None] = mapped_column(ForeignKey("test_runs.id"), nullable=True)
 
     suite = relationship("TestSuite", back_populates="test_cases")
     creator = relationship("User", back_populates="created_test_cases", foreign_keys=[created_by])

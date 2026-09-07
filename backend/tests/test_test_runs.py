@@ -1,3 +1,4 @@
+from tests.workflow_factories import create_reviewed_case
 from fastapi.testclient import TestClient
 
 from tests.test_auth import login
@@ -8,8 +9,7 @@ def auth_headers(client: TestClient) -> dict[str, str]:
 
 
 def create_test_case(client: TestClient, headers: dict[str, str], code: str = "TC-RUN-1") -> dict:
-    response = client.post(
-        "/api/test-cases",
+    response = create_reviewed_case(client,
         headers=headers,
         json={
             "suite_id": 1,
@@ -20,7 +20,7 @@ def create_test_case(client: TestClient, headers: dict[str, str], code: str = "T
             "steps": [{"step_order": 1, "action": "Open page", "expected_result": "Page is visible"}],
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 200
     return response.json()
 
 

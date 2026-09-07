@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     TestCase,
+    TestCaseVersion,
     TestCaseTagAssignment,
     TestRun,
     TestRunAttempt,
@@ -24,6 +25,8 @@ from app.schemas.test_run import (
     UpdateResultRequest,
 )
 from app.services.common import apply_updates, not_found
+from app.services.run_case_creation import bind_version, copy_binding, steps_for, mark_started, lock_run
+from app.services.test_case_versions import version_state, lock_draft, freeze
 
 
 def list_test_runs(
@@ -111,6 +114,13 @@ def get_execution(db: Session, test_run_id: int, *, attempt_id: int | None = Non
                     "step_results": item.step_results,
                     "created_at": item.created_at,
                     "updated_at": item.updated_at,
+                    "execution_snapshot": item.execution_snapshot,
+                    "test_case_version_id": item.test_case_version_id,
+                    "version_number": item.version_number,
+                    "approval_state": version_state(db, item.test_case_version_id),
+                    "approval_state_at_start": item.approval_state_at_start,
+                    "approval_state_at_binding": item.approval_state_at_binding,
+                    "closure_reason": item.closure_reason,
                 }
             )
 
@@ -133,19 +143,25 @@ def get_execution(db: Session, test_run_id: int, *, attempt_id: int | None = Non
                 "comment": case_attempt.comment,
                 "executed_by": case_attempt.executed_by,
                 "executed_at": case_attempt.executed_at,
-                "test_case_version": run_case.test_case_version,
-                "test_case_snapshot": run_case.test_case_snapshot,
+                "test_case_version": case_attempt.version_number or run_case.test_case_version,
+                "test_case_snapshot": case_attempt.execution_snapshot,
                 "step_results": case_attempt.step_results,
                 "created_at": run_case.created_at,
                 "updated_at": case_attempt.updated_at,
-                "code": run_case.code,
-                "title": run_case.title,
-                "suite_name": run_case.suite_name,
+                "code": (case_attempt.execution_snapshot or {}).get("code", run_case.code),
+                "title": (case_attempt.execution_snapshot or {}).get("title", "Historický snapshot chybí"),
+                "suite_name": (case_attempt.execution_snapshot or {}).get("suite_name"),
                 "test_case": run_case.test_case,
             }
         )
+    definition_counts = {"approved": 0, "unapproved": 0, "rejected": 0, "unknown": 0}
+    for attempt in attempts_by_case.values():
+        state = version_state(db, attempt.test_case_version_id)
+        bucket = "approved" if state in ("approved", "legacy_import") else "rejected" if state == "rejected" else "unknown" if state == "unknown" else "unapproved"
+        definition_counts[bucket] += 1
     return {
         **{column.name: getattr(test_run, column.name) for column in TestRun.__table__.columns},
+        "definition_counts": definition_counts,
         "attempts": test_run.attempts,
         "selected_attempt_id": selected_attempt.id,
         "test_run_cases": execution_cases,
@@ -186,7 +202,10 @@ def create_test_run(db: Session, payload: TestRunCreate, current_user: User) -> 
 
 
 def update_test_run(db: Session, test_run_id: int, payload: TestRunUpdate) -> TestRun:
+    db.query(TestRun.id).filter(TestRun.id == test_run_id).with_for_update().first()
     test_run = get_test_run(db, test_run_id)
+    if test_run.status == "completed" and payload.status in ("open", "in_progress"):
+        raise HTTPException(409, "Dokončený pokus nelze znovu otevřít přepsáním stavu. Založte rerun.")
     apply_updates(test_run, payload)
     if (
         test_run.planned_start is not None
@@ -293,6 +312,14 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
         .all()
     )
     found_ids = {test_case.id for test_case in test_cases}
+    from app.services.policies import require_run_execution
+    if current_user:
+        require_run_execution(db, test_run, current_user)
+    for test_case in sorted(test_cases, key=lambda item: item.id):
+        from app.services.test_case_versions import lock_case
+        lock_case(db, test_case.id)
+        if test_case.status != "ready" or not test_case.current_approved_version_id:
+            raise HTTPException(409, f"{test_case.code}: do běžného runu lze přidat pouze schválenou verzi.")
     missing = set(payload.test_case_ids) - found_ids
     if missing:
         raise HTTPException(
@@ -320,7 +347,7 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
             assigned_to=payload.assigned_to,
             result="not_run",
             test_case_version=test_case.version,
-            test_case_snapshot=_snapshot_test_case(test_case),
+            test_case_snapshot=db.get(TestCaseVersion, test_case.current_approved_version_id).content_snapshot,
         )
         for test_case in test_cases
     ]
@@ -337,6 +364,8 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
             for run_case in run_cases
         ]
         db.add_all(case_attempts)
+        for test_case, case_attempt in zip(test_cases, case_attempts, strict=True):
+            bind_version(db, case_attempt, db.get(TestCaseVersion, test_case.current_approved_version_id), test_run_id)
         db.flush()
         step_results = []
         for test_case, run_case, case_attempt in zip(
@@ -349,12 +378,11 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
                 TestRunStepResult(
                     test_run_case_id=run_case.id,
                     test_run_case_attempt_id=case_attempt.id,
-                    test_step_id=step.id,
-                    step_order=step.step_order,
+                    test_step_id=step["id"],
+                    step_order=step["step_order"],
                     result="not_run",
                 )
-                for step in test_case.steps
-                if step.step_type == "test"
+                for step in steps_for(case_attempt)
             )
         db.add_all(step_results)
         db.commit()
@@ -468,7 +496,14 @@ def create_case_rerun(
     db: Session,
     case_attempt_id: int,
     current_user: User,
+    selection=None,
+    *,
+    commit=True,
 ) -> dict:
+    original = db.get(TestRunCaseAttempt, case_attempt_id)
+    if original is None:
+        raise not_found("Test run case pokus")
+    lock_run(db, original.test_run_case.test_run_id, current_user, open_required=False)
     previous_case_attempt = (
         db.query(TestRunCaseAttempt)
         .filter(TestRunCaseAttempt.id == case_attempt_id)
@@ -513,9 +548,23 @@ def create_case_rerun(
         attempt_number=previous_case_attempt.attempt_number + 1,
         result="not_run",
     )
+    if selection and selection.draft_id:
+        case, draft = lock_draft(db, selection.draft_id, current_user, selection.lock_version, editable=False)
+        if case.id != run_case.test_case_id or draft.origin_run_id != test_run.id or draft.status == "closed":
+            raise HTTPException(409, "Návrh nepatří k tomuto scénáři a runu.")
+        bind_version(db, case_attempt, freeze(db, case, draft, current_user), test_run.id)
+    elif selection and selection.version_id:
+        version = db.get(TestCaseVersion, selection.version_id)
+        if not version or version.test_case_id != run_case.test_case_id:
+            raise HTTPException(422, "Verze nepatří k test case.")
+        bind_version(db, case_attempt, version, test_run.id)
+    else:
+        copy_binding(db, case_attempt, previous_case_attempt, test_run.id)
+    previous_case_attempt.closed_at = datetime.now(timezone.utc)
+    previous_case_attempt.closure_reason = "definition_changed" if case_attempt.test_case_version_id != previous_case_attempt.test_case_version_id else "rerun"
     db.add(case_attempt)
     db.flush()
-    for step in _snapshot_test_steps(run_case):
+    for step in steps_for(case_attempt):
         db.add(
             TestRunStepResult(
                 test_run_case_id=run_case.id,
@@ -539,11 +588,16 @@ def create_case_rerun(
     test_run.status = "in_progress"
     test_run.started_at = test_run.started_at or now
     test_run.finished_at = None
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    db.expire_all()
     return get_execution(db, test_run.id, attempt_id=run_attempt.id)
 
 
 def create_rerun(db: Session, test_run_id: int, current_user: User) -> dict:
+    lock_run(db, test_run_id, current_user, open_required=False)
     test_run = (
         db.query(TestRun)
         .options(
@@ -603,6 +657,7 @@ def create_rerun(db: Session, test_run_id: int, current_user: User) -> dict:
     db.add(attempt)
     db.flush()
 
+    previous_cases = _latest_case_attempts(db, previous_attempt.id)
     for run_case in test_run.test_run_cases:
         case_attempt = TestRunCaseAttempt(
             test_run_attempt_id=attempt.id,
@@ -610,9 +665,10 @@ def create_rerun(db: Session, test_run_id: int, current_user: User) -> dict:
             attempt_number=1,
             result="not_run",
         )
+        copy_binding(db, case_attempt, previous_cases.get(run_case.id), test_run.id)
         db.add(case_attempt)
         db.flush()
-        for step in _snapshot_test_steps(run_case):
+        for step in steps_for(case_attempt):
             db.add(
                 TestRunStepResult(
                     test_run_case_id=run_case.id,
@@ -659,6 +715,10 @@ def update_result(
     payload: UpdateResultRequest,
     current_user: User,
 ) -> TestRunCase:
+    original = db.get(TestRunCaseAttempt, case_attempt_id)
+    if original is None:
+        raise not_found("Test run case pokus")
+    lock_run(db, original.test_run_case.test_run_id, current_user)
     case_attempt = (
         db.query(TestRunCaseAttempt)
         .filter(TestRunCaseAttempt.id == case_attempt_id)
@@ -695,6 +755,7 @@ def update_result(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Historický nebo dokončený pokus nelze upravovat.")
 
     now = datetime.now(timezone.utc)
+    mark_started(db, case_attempt, current_user)
     case_attempt.result = payload.result
     case_attempt.comment = payload.comment
     case_attempt.executed_by = current_user.id

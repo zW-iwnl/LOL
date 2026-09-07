@@ -1,20 +1,25 @@
 import { Layers3, Plus, Trash2, Unlink } from "lucide-react";
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
   addSuiteGroupChild,
   addSuiteGroupMember,
   createSuiteGroup,
   deleteSuiteGroup,
+  getSuiteGroupTestCases,
   removeSuiteGroupChild,
   removeSuiteGroupMember,
   setSuiteGroupParents,
   setSuiteGroupTestCases,
+  updateSuiteGroupChildScope,
   type SuiteGroup,
   type TestCase,
   type TestSuite,
 } from "../../api/client";
-import { groupPathRows, reachableGroupIds, wouldCreateGroupCycle } from "./groupGraph";
+import {
+  groupPathRows,
+  wouldCreateGroupCycle,
+} from "./groupGraph";
 
 type RepositoryGroupsViewProps = {
   groups: SuiteGroup[];
@@ -24,8 +29,6 @@ type RepositoryGroupsViewProps = {
   onSelectedGroupChange: (groupId: number | null) => void;
   onChanged: () => void | Promise<void>;
 };
-
-type ContentMode = "direct" | "effective";
 
 export function RepositoryGroupsView({
   groups,
@@ -41,7 +44,10 @@ export function RepositoryGroupsView({
   const [childToAdd, setChildToAdd] = useState("");
   const [suiteToAdd, setSuiteToAdd] = useState("");
   const [caseToAdd, setCaseToAdd] = useState("");
-  const [contentMode, setContentMode] = useState<ContentMode>("effective");
+  const [childIncludeDescendants, setChildIncludeDescendants] = useState(true);
+  const [contentCases, setContentCases] = useState<TestCase[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
@@ -49,7 +55,7 @@ export function RepositoryGroupsView({
     () => new Map(groups.map((group) => [group.id, group])),
     [groups],
   );
-  const selected = selectedGroupId === null ? null : byId.get(selectedGroupId) ?? null;
+  const selected = selectedGroupId === null ? groups[0] ?? null : byId.get(selectedGroupId) ?? null;
   const normalizedQuery = query.trim().toLocaleLowerCase("cs");
   const hierarchyRows = useMemo(() => groupPathRows(groups), [groups]);
   const visibleRows = normalizedQuery
@@ -66,24 +72,41 @@ export function RepositoryGroupsView({
     .slice()
     .sort((left, right) => left.sort_order - right.sort_order)
     .map((member) => member.test_case_id) ?? [];
-  const effectiveGroupIds = selected
-    ? new Set([selected.id, ...reachableGroupIds(groups, selected.id)])
-    : new Set<number>();
-  const effectiveSuiteIds = new Set(
-    groups
-      .filter((group) => effectiveGroupIds.has(group.id))
-      .flatMap((group) => group.members.map((member) => member.suite_id)),
-  );
-  const effectiveExplicitCaseIds = new Set(
-    groups
-      .filter((group) => effectiveGroupIds.has(group.id))
-      .flatMap((group) => group.test_case_members.map((member) => member.test_case_id)),
-  );
-  const contentCases = testCases.filter((testCase) => (
-    contentMode === "direct"
-      ? memberSuiteIds.has(testCase.suite_id) || explicitCaseIds.includes(testCase.id)
-      : effectiveSuiteIds.has(testCase.suite_id) || effectiveExplicitCaseIds.has(testCase.id)
-  ));
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selected) {
+      setContentCases([]);
+      setContentError(null);
+      setContentLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setContentCases([]);
+    setContentError(null);
+    setContentLoading(true);
+    void getSuiteGroupTestCases(selected.id)
+      .then((items) => {
+        if (!cancelled) setContentCases(items);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setContentError(
+          error instanceof Error
+            ? error.message
+            : "Obsah skupiny se nepodařilo načíst.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setContentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
 
   function selectGroup(groupId: number) {
     onSelectedGroupChange(groupId);
@@ -160,10 +183,15 @@ export function RepositoryGroupsView({
   async function addChild() {
     if (!selected || !childToAdd) return;
     await mutate(
-      () => addSuiteGroupChild(selected.id, Number(childToAdd)),
+      () => addSuiteGroupChild(
+        selected.id,
+        Number(childToAdd),
+        childIncludeDescendants,
+      ),
       "Podřazená skupina byla přidána.",
     );
     setChildToAdd("");
+    setChildIncludeDescendants(true);
   }
 
   async function addSuite() {
@@ -291,20 +319,22 @@ export function RepositoryGroupsView({
                   ))}
                 </div>
               </div>
-              <button
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-rose-200 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
-                disabled={busy}
-                type="button"
-                onClick={() => {
-                  if (!window.confirm(`Smazat skupinu „${selected.name}“? Suity ani test cases se nesmažou.`)) return;
-                  void mutate(
-                    () => deleteSuiteGroup(selected.id),
-                    "Skupina byla smazána.",
-                  ).then(() => onSelectedGroupChange(null));
-                }}
-              >
-                <Trash2 size={15} aria-hidden="true" /> Smazat skupinu
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-rose-200 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
+                  disabled={busy}
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(`Smazat skupinu „${selected.name}“? Suity ani test cases se nesmažou.`)) return;
+                    void mutate(
+                      () => deleteSuiteGroup(selected.id),
+                      "Skupina byla smazána.",
+                    ).then(() => onSelectedGroupChange(null));
+                  }}
+                >
+                  <Trash2 size={15} aria-hidden="true" /> Smazat skupinu
+                </button>
+              </div>
             </div>
 
 
@@ -335,13 +365,30 @@ export function RepositoryGroupsView({
               </RelationSection>
 
               <RelationSection title="Podřazené skupiny">
-                {selected.child_ids.map((id) => (
-                  <RelationRow
+                {selected.child_relations.map((relation) => (
+                  <GroupRelationRow
                     disabled={busy}
-                    key={id}
-                    label={groupLabel(byId.get(id), id)}
+                    includeDescendants={relation.include_descendants}
+                    key={relation.child_group_id}
+                    label={groupLabel(
+                      byId.get(relation.child_group_id),
+                      relation.child_group_id,
+                    )}
+                    onIncludeDescendantsChange={(include) => void mutate(
+                      () => updateSuiteGroupChildScope(
+                        selected.id,
+                        relation.child_group_id,
+                        include,
+                      ),
+                      include
+                        ? "Podskupiny byly zahrnuty."
+                        : "Podskupiny byly z výběru vyloučeny.",
+                    )}
                     onRemove={() => void mutate(
-                      () => removeSuiteGroupChild(selected.id, id),
+                      () => removeSuiteGroupChild(
+                        selected.id,
+                        relation.child_group_id,
+                      ),
                       "Podřazená vazba byla odebrána.",
                     )}
                   />
@@ -360,6 +407,18 @@ export function RepositoryGroupsView({
                   )}
                   placeholder="Vybrat podřazenou skupinu"
                 />
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-violet-100 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                  <input
+                    checked={childIncludeDescendants}
+                    className="h-4 w-4 accent-violet-600"
+                    type="checkbox"
+                    onChange={(event) => setChildIncludeDescendants(event.target.checked)}
+                  />
+                  Zahrnout podskupiny přidávané skupiny
+                </label>
+                <p className="text-xs text-slate-500">
+                  Bez zaškrtnutí se vloží jen vybraná skupina, ne její potomci.
+                </p>
               </RelationSection>
 
               <RelationSection title="Test suity">
@@ -416,29 +475,23 @@ export function RepositoryGroupsView({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">Obsah skupiny</h3>
-                  <p className="mt-1 text-xs text-slate-500">Rozlišení vlastního obsahu a položek zděděných z podřízených skupin.</p>
-                </div>
-                <div aria-label="Rozsah obsahu skupiny" className="flex rounded-md border border-slate-200 p-1" role="group">
-                  <button
-                    aria-pressed={contentMode === "direct"}
-                    className={contentMode === "direct" ? "rounded bg-violet-50 px-3 py-2 text-xs font-medium text-violet-800" : "rounded px-3 py-2 text-xs text-slate-600"}
-                    type="button"
-                    onClick={() => setContentMode("direct")}
-                  >
-                    Přímý
-                  </button>
-                  <button
-                    aria-pressed={contentMode === "effective"}
-                    className={contentMode === "effective" ? "rounded bg-violet-50 px-3 py-2 text-xs font-medium text-violet-800" : "rounded px-3 py-2 text-xs text-slate-600"}
-                    type="button"
-                    onClick={() => setContentMode("effective")}
-                  >
-                    Veškerý viditelný
-                  </button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Obsah respektuje nastavení „Zahrnout podskupiny“ u každé podřazené vazby.
+                  </p>
                 </div>
               </div>
               <div className="mt-3 space-y-2">
-                {contentCases.slice(0, 100).map((testCase) => {
+                {contentLoading && (
+                  <p aria-live="polite" className="rounded-md bg-slate-50 p-4 text-sm text-slate-500" role="status">
+                    Načítám obsah skupiny…
+                  </p>
+                )}
+                {contentError && (
+                  <p className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
+                    {contentError}
+                  </p>
+                )}
+                {!contentLoading && !contentError && contentCases.slice(0, 100).map((testCase) => {
                   const origin = explicitCaseIds.includes(testCase.id)
                     ? "Přímý odkaz"
                     : memberSuiteIds.has(testCase.suite_id)
@@ -456,10 +509,10 @@ export function RepositoryGroupsView({
                     </div>
                   );
                 })}
-                {contentCases.length === 0 && (
+                {!contentLoading && !contentError && contentCases.length === 0 && (
                   <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-500">V tomto rozsahu nejsou žádné test cases.</p>
                 )}
-                {contentCases.length > 100 && (
+                {!contentLoading && !contentError && contentCases.length > 100 && (
                   <p className="text-xs text-slate-500">Zobrazeno prvních 100 z {contentCases.length} test cases.</p>
                 )}
               </div>
@@ -496,6 +549,46 @@ function RelationSection({ title, children }: { title: string; children: ReactNo
       </h3>
       <div className="space-y-2 p-3">{children}</div>
     </section>
+  );
+}
+
+function GroupRelationRow({
+  label,
+  includeDescendants,
+  onIncludeDescendantsChange,
+  onRemove,
+  disabled,
+}: {
+  label: string;
+  includeDescendants: boolean;
+  onIncludeDescendantsChange: (include: boolean) => void;
+  onRemove: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-xs text-slate-600">
+        <input
+          checked={includeDescendants}
+          className="h-4 w-4 accent-violet-600"
+          disabled={disabled}
+          type="checkbox"
+          onChange={(event) => onIncludeDescendantsChange(event.target.checked)}
+        />
+        Zahrnout podskupiny
+      </label>
+      <button
+        aria-label={`Odebrat vazbu ${label}`}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+        disabled={disabled}
+        title="Odebrat vazbu"
+        type="button"
+        onClick={onRemove}
+      >
+        <Unlink size={15} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

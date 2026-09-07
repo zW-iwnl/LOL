@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, true
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Requirement, TestCase, TestCaseTagAssignment, TestRunCase, TestRunCaseAttempt, User
@@ -111,14 +111,15 @@ def get_traceability_matrix(db: Session) -> list[TraceabilityRow]:
         for test_case in requirement.test_cases
     }
     latest_results = _latest_results_by_test_case(db, all_test_case_ids)
+    current_results = _latest_results_by_test_case(db, all_test_case_ids, current_only=True)
 
     rows: list[TraceabilityRow] = []
     for requirement in requirements:
         test_case_ids = [test_case.id for test_case in requirement.test_cases]
         requirement_results = {
-            test_case_id: latest_results[test_case_id]
+            test_case_id: current_results[test_case_id]
             for test_case_id in test_case_ids
-            if test_case_id in latest_results
+            if test_case_id in current_results
         }
         latest_result = _latest_result(requirement_results)
         tested_case_count = len(requirement_results)
@@ -137,10 +138,14 @@ def get_traceability_matrix(db: Session) -> list[TraceabilityRow]:
                         code=test_case.code,
                         title=test_case.title,
                         status=test_case.status,
+                        published_version_id=test_case.current_approved_version_id,
+                        latest_tested_version_id=latest_results[test_case.id].test_case_version_id if test_case.id in latest_results else None,
+                        latest_tested_version_number=latest_results[test_case.id].version_number if test_case.id in latest_results else None,
+                        latest_result=latest_results[test_case.id].result if test_case.id in latest_results else None,
                     )
                     for test_case in requirement.test_cases
                 ],
-                coverage_status="covered" if test_case_ids else "missing_tests",
+                coverage_status="covered" if any(c.current_approved_version_id and c.status == "ready" for c in requirement.test_cases) else ("proposed" if test_case_ids else "missing_tests"),
                 risk_status=_traceability_risk_status(
                     total_case_count=len(test_case_ids),
                     tested_case_count=tested_case_count,
@@ -177,7 +182,7 @@ def _link_test_cases(db: Session, requirement: Requirement, test_case_ids: list[
             requirement.test_cases.append(test_case)
 
 
-def _latest_results_by_test_case(db: Session, test_case_ids: set[int]) -> dict[int, object]:
+def _latest_results_by_test_case(db: Session, test_case_ids: set[int], *, current_only=False) -> dict[int, object]:
     if not test_case_ids:
         return {}
 
@@ -187,6 +192,8 @@ def _latest_results_by_test_case(db: Session, test_case_ids: set[int]) -> dict[i
             TestRunCaseAttempt.result.label("result"),
             TestRunCaseAttempt.executed_at.label("executed_at"),
             TestRunCaseAttempt.updated_at.label("updated_at"),
+            TestRunCaseAttempt.test_case_version_id.label("test_case_version_id"),
+            TestRunCaseAttempt.version_number.label("version_number"),
             func.row_number()
             .over(
                 partition_by=TestRunCase.test_case_id,
@@ -202,9 +209,12 @@ def _latest_results_by_test_case(db: Session, test_case_ids: set[int]) -> dict[i
             TestRunCaseAttempt,
             TestRunCaseAttempt.test_run_case_id == TestRunCase.id,
         )
+        .join(TestCase, TestCase.id == TestRunCase.test_case_id)
         .filter(
             TestRunCase.test_case_id.in_(test_case_ids),
             TestRunCaseAttempt.result != "not_run",
+            (TestRunCaseAttempt.test_case_version_id == TestCase.current_approved_version_id) if current_only else true(),
+            (TestCase.status == "ready") if current_only else true(),
         )
         .subquery()
     )

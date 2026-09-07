@@ -22,8 +22,9 @@ export function groupPathRows(groups: SuiteGroup[]): GroupPathRow[] {
     .sort(compareGroups);
   const rows: GroupPathRow[] = [];
   const represented = new Set<number>();
+  const expanded = new Set<number>();
 
-  function visit(group: SuiteGroup, path: SuiteGroup[]) {
+  function visit(group: SuiteGroup, path: SuiteGroup[], expandChildren = true) {
     if (path.some((item) => item.id === group.id)) return;
     const nextPath = [...path, group];
     represented.add(group.id);
@@ -33,18 +34,36 @@ export function groupPathRows(groups: SuiteGroup[]): GroupPathRow[] {
       pathKey: nextPath.map((item) => item.id).join("-"),
       pathLabel: nextPath.map((item) => item.name).join(" › "),
     });
-    group.child_ids
-      .map((id) => byId.get(id))
-      .filter((item): item is SuiteGroup => item !== undefined)
-      .sort(compareGroups)
-      .forEach((child) => visit(child, nextPath));
+    if (!expandChildren) return;
+    expanded.add(group.id);
+    const childRelations = group.child_relations ?? group.child_ids.map((childGroupId) => ({
+      child_group_id: childGroupId,
+      include_descendants: true,
+      sort_order: 0,
+    }));
+    childRelations
+      .map((relation) => ({ relation, child: byId.get(relation.child_group_id) }))
+      .filter((item): item is { relation: typeof childRelations[number]; child: SuiteGroup } => (
+        item.child !== undefined
+      ))
+      .sort((left, right) => (
+        left.relation.sort_order - right.relation.sort_order
+        || compareGroups(left.child, right.child)
+      ))
+      .forEach(({ relation, child }) => (
+        visit(child, nextPath, relation.include_descendants)
+      ));
   }
 
   roots.forEach((root) => visit(root, []));
-  groups
-    .filter((group) => !represented.has(group.id))
-    .sort(compareGroups)
-    .forEach((group) => visit(group, []));
+  for (const group of groups.slice().sort(compareGroups)) {
+    if (
+      !represented.has(group.id)
+      || (group.child_ids.length > 0 && !expanded.has(group.id))
+    ) {
+      visit(group, []);
+    }
+  }
   return rows;
 }
 

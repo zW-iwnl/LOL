@@ -24,6 +24,13 @@ export type TestRunAttempt = {
 
 export type TestRunCaseAttemptHistory = {
   id: number;
+  execution_snapshot: Record<string, unknown> | null;
+  version_number: number | null;
+  test_case_version_id: number | null;
+  approval_state: string;
+  approval_state_at_start: string | null;
+  approval_state_at_binding: string;
+  closure_reason: string | null;
   test_run_attempt_id: number;
   test_run_attempt_number: number;
   test_run_case_id: number;
@@ -112,6 +119,7 @@ export type TestRunExecutionCase = TestRunCase & {
 };
 
 export type TestRunExecution = Omit<TestRun, "test_run_cases"> & {
+  definition_counts: Record<string, number>;
   attempts: TestRunAttempt[];
   selected_attempt_id: number;
   test_run_cases: TestRunExecutionCase[];

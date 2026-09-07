@@ -293,7 +293,7 @@ export function RequirementsPage() {
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      {row.test_cases.map((testCase) => <div key={testCase.id}>{testCase.code} - {testCase.title}</div>)}
+                      {row.test_cases.map((testCase) => <div key={testCase.id}>{testCase.code} - {testCase.title}<p className="text-xs text-slate-500">{testCase.latest_result ? `${testCase.latest_result} · verze ${testCase.latest_tested_version_number ?? "legacy"}` : "Dosud neprovedeno"}{testCase.published_version_id && testCase.latest_tested_version_id !== testCase.published_version_id ? " · Aktuální schválená verze není tímto výsledkem ověřena" : ""}{!testCase.published_version_id ? " · Pouze navržené pokrytí" : ""}</p></div>)}
                       {row.test_cases.length === 0 && <span className="text-slate-500">-</span>}
                     </td>
                     <td className="px-5 py-4">

@@ -22,6 +22,7 @@ import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { AccessibleDialog } from "../components/AccessibleDialog";
 import { PageHeader } from "../components/PageHeader";
 import { RepositorySearch } from "../components/RepositorySearch";
+import { MultiTagSelect } from "../components/TestCaseTags";
 import {
   RepositoryWorkspace,
   type RepositoryTab,
@@ -72,11 +73,14 @@ export function TestCasesPage() {
   const searchType = parseSearchType(searchParams.get("searchType"));
   const selectedGroupId = parsePositiveId(searchParams.get("group"));
   const selectedSuiteId = parsePositiveId(searchParams.get("suite"));
+  const businessAreaFilterIds = parsePositiveIds(searchParams.getAll("businessAreaId"));
+  const applicationDomainFilterIds = parsePositiveIds(searchParams.getAll("applicationDomainId"));
+  const objectTypeFilterIds = parsePositiveIds(searchParams.getAll("objectTypeId"));
   const urlSearchQuery = searchParams.get("q") ?? "";
   const shouldOpenCaseForm = searchParams.get("new") === "1";
   const suites = suitesState.data ?? [];
   const groups = groupsState.data ?? [];
-  const testCases = casesState.data ?? [];
+  const testCases = (casesState.data ?? []).filter(item => item.status === "ready" && item.current_approved_version_id);
   useEffect(() => {
     setSearchQuery(urlSearchQuery);
   }, [urlSearchQuery]);
@@ -137,6 +141,18 @@ export function TestCasesPage() {
       const next = new URLSearchParams(current);
       if (type === "all") next.delete("searchType");
       else next.set("searchType", type);
+      return next;
+    }, { replace: true });
+  }
+
+  function setRepositoryTagFilter(
+    parameter: "businessAreaId" | "applicationDomainId" | "objectTypeId",
+    values: number[],
+  ) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete(parameter);
+      values.forEach((value) => next.append(parameter, String(value)));
       return next;
     }, { replace: true });
   }
@@ -276,21 +292,21 @@ export function TestCasesPage() {
     setFeedback(null);
     setFormError(null);
     try {
-      await createTestCase({
+      const createdCase = await createTestCase({
         suite_id: Number(caseForm.suiteId),
         code: caseForm.code.trim(),
         title: caseForm.title.trim(),
         description: caseForm.description.trim() || null,
         preconditions: null,
         expected_summary: null,
-        status: caseForm.status,
+        status: "draft",
         automated: caseForm.automated,
         tag_ids: caseForm.tagIds,
         steps: preparedSteps.steps,
       });
       setShowCaseForm(false);
       refresh();
-      setFeedback({ kind: "success", message: "Test case byl vytvořen." });
+      navigate(`/test-cases/${createdCase.id}`);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Test case se nepodařilo vytvořit.");
     } finally {
@@ -300,7 +316,7 @@ export function TestCasesPage() {
 
   async function removeCase(testCase: TestCase) {
     if (!window.confirm(
-      `Vyřadit test case ${testCase.code}? Nepoužitý koncept bude odstraněn, ostatní test cases se označí jako Vyřazeno.`,
+      `Vyřadit test case ${testCase.code}? Návrhy, verze a historie provedení zůstanou zachované.`,
     )) return;
     setFeedback(null);
     try {
@@ -377,6 +393,34 @@ export function TestCasesPage() {
 
       <section className="rounded-md border border-slate-200 bg-white">
         <RepositorySearch
+          applicationDomainIds={applicationDomainFilterIds}
+          businessAreaIds={businessAreaFilterIds}
+          filterControls={(
+            <>
+              <MultiTagSelect
+                label="Business oblast"
+                values={businessAreaFilterIds}
+                tags={tags.filter((tag) => tag.category === "business_area")}
+                emptyLabel="Vyhledat business oblast"
+                onChange={(values) => setRepositoryTagFilter("businessAreaId", values)}
+              />
+              <MultiTagSelect
+                label="Aplikace/doména"
+                values={applicationDomainFilterIds}
+                tags={tags.filter((tag) => tag.category === "application_domain")}
+                emptyLabel="Vyhledat aplikaci nebo doménu"
+                onChange={(values) => setRepositoryTagFilter("applicationDomainId", values)}
+              />
+              <MultiTagSelect
+                label="Objekt"
+                values={objectTypeFilterIds}
+                tags={tags.filter((tag) => tag.category === "object_type")}
+                emptyLabel="Vyhledat objekt"
+                onChange={(values) => setRepositoryTagFilter("objectTypeId", values)}
+              />
+            </>
+          )}
+          objectTypeIds={objectTypeFilterIds}
           query={searchQuery}
           type={searchType}
           onQueryChange={setRepositorySearchQuery}
@@ -579,4 +623,12 @@ function parsePositiveId(value: string | null): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePositiveIds(values: string[]): number[] {
+  return [...new Set(
+    values
+      .map(Number)
+      .filter((value) => Number.isInteger(value) && value > 0),
+  )];
 }
