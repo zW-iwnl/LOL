@@ -13,6 +13,7 @@ def test_delete_test_case_removes_case_from_repository(client: TestClient) -> No
         "/api/test-cases",
         headers=headers,
         json={
+            "suite_id": 1,
             "code": "TC-DELETE-1",
             "title": "Case urceny ke smazani",
             "status": "draft",
@@ -39,12 +40,13 @@ def test_delete_test_case_removes_case_from_repository(client: TestClient) -> No
     assert test_case_id not in {item["id"] for item in repository_response.json()}
 
 
-def test_delete_test_case_removes_run_items_and_requirement_links(client: TestClient) -> None:
+def test_delete_used_test_case_archives_case_and_preserves_history(client: TestClient) -> None:
     headers = auth_headers(client)
     create_response = client.post(
         "/api/test-cases",
         headers=headers,
         json={
+            "suite_id": 1,
             "code": "TC-DELETE-LINKED",
             "title": "Case pouzity v runu a requirementu",
             "status": "ready",
@@ -84,9 +86,39 @@ def test_delete_test_case_removes_run_items_and_requirement_links(client: TestCl
     delete_response = client.delete(f"/api/test-cases/{test_case_id}", headers=headers)
 
     assert delete_response.status_code == 204
+    archived_case = client.get(f"/api/test-cases/{test_case_id}", headers=headers)
+    assert archived_case.status_code == 200
+    assert archived_case.json()["status"] == "deprecated"
+
     requirement_after_delete = client.get(f"/api/requirements/{requirement_id}", headers=headers)
     assert requirement_after_delete.status_code == 200
-    assert requirement_after_delete.json()["test_cases"] == []
+    assert [item["id"] for item in requirement_after_delete.json()["test_cases"]] == [test_case_id]
+
     run_after_delete = client.get(f"/api/test-runs/{test_run_id}", headers=headers)
     assert run_after_delete.status_code == 200
-    assert run_after_delete.json()["test_run_cases"] == []
+    assert [item["test_case_id"] for item in run_after_delete.json()["test_run_cases"]] == [test_case_id]
+
+
+def test_delete_unused_ready_case_archives_instead_of_hard_delete(
+    client: TestClient,
+) -> None:
+    headers = auth_headers(client)
+    create_response = client.post(
+        "/api/test-cases",
+        headers=headers,
+        json={
+            "suite_id": 1,
+            "code": "TC-ARCHIVE-READY",
+            "title": "Publikovany case",
+            "status": "ready",
+        },
+    )
+    assert create_response.status_code == 201
+    test_case_id = create_response.json()["id"]
+
+    delete_response = client.delete(f"/api/test-cases/{test_case_id}", headers=headers)
+
+    assert delete_response.status_code == 204
+    archived_response = client.get(f"/api/test-cases/{test_case_id}", headers=headers)
+    assert archived_response.status_code == 200
+    assert archived_response.json()["status"] == "deprecated"

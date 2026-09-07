@@ -60,9 +60,29 @@ def update_step_result(
     payload: UpdateStepResultRequest,
     current_user: User,
 ) -> TestRunStepResult:
-    case_attempt = db.get(TestRunCaseAttempt, case_attempt_id)
+    case_attempt = (
+        db.query(TestRunCaseAttempt)
+        .filter(TestRunCaseAttempt.id == case_attempt_id)
+        .with_for_update()
+        .first()
+    )
     if case_attempt is None:
         raise not_found("Test run case pokus")
+
+    latest_case_attempt = (
+        db.query(TestRunCaseAttempt.id)
+        .filter(
+            TestRunCaseAttempt.test_run_attempt_id == case_attempt.test_run_attempt_id,
+            TestRunCaseAttempt.test_run_case_id == case_attempt.test_run_case_id,
+        )
+        .order_by(TestRunCaseAttempt.attempt_number.desc())
+        .first()
+    )
+    if latest_case_attempt is None or latest_case_attempt[0] != case_attempt.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Historický pokus test case nelze upravovat.",
+        )
 
     run_case = case_attempt.test_run_case
     attempt = case_attempt.test_run_attempt

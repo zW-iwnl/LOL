@@ -1,48 +1,154 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     SuiteGroup,
     SuiteGroupMember,
+    SuiteGroupRelation,
     SuiteGroupTestCaseMember,
     TestCase,
+    TestCaseTag,
+    TestCaseTagAssignment,
     TestSuite,
 )
 from app.schemas.suite_group import (
     SuiteGroupCreate,
     SuiteGroupMemberCreate,
     SuiteGroupMemberUpdate,
+    SuiteGroupTagRead,
     SuiteGroupUpdate,
 )
 from app.services.common import not_found
 
 
-def list_groups(db: Session) -> list[SuiteGroup]:
-    return (
-        db.query(SuiteGroup)
-        .options(
-            selectinload(SuiteGroup.memberships),
-            selectinload(SuiteGroup.test_case_memberships),
+def group_descendants_cte():
+    descendants = select(
+        SuiteGroup.id.label("ancestor_id"),
+        SuiteGroup.id.label("descendant_id"),
+    ).cte("group_descendants", recursive=True)
+    return descendants.union(
+        select(
+            descendants.c.ancestor_id,
+            SuiteGroupRelation.child_group_id,
+        ).select_from(
+            descendants.join(
+                SuiteGroupRelation,
+                SuiteGroupRelation.parent_group_id == descendants.c.descendant_id,
+            )
         )
+    )
+
+
+def group_test_cases_cte():
+    """Return distinct test cases visible through each group in the DAG."""
+    descendants = group_descendants_cte()
+    explicit_cases = select(
+        descendants.c.ancestor_id.label("group_id"),
+        SuiteGroupTestCaseMember.test_case_id.label("test_case_id"),
+    ).select_from(
+        descendants.join(
+            SuiteGroupTestCaseMember,
+            SuiteGroupTestCaseMember.group_id == descendants.c.descendant_id,
+        )
+    )
+    suite_cases = select(
+        descendants.c.ancestor_id.label("group_id"),
+        TestCase.id.label("test_case_id"),
+    ).select_from(
+        descendants.join(
+            SuiteGroupMember,
+            SuiteGroupMember.group_id == descendants.c.descendant_id,
+        ).join(TestCase, TestCase.suite_id == SuiteGroupMember.suite_id)
+    )
+    return explicit_cases.union(suite_cases).cte("group_test_cases")
+
+
+def group_tags_by_id(
+    db: Session,
+    group_ids: list[int],
+) -> dict[int, list[SuiteGroupTagRead]]:
+    tags_by_group = {group_id: [] for group_id in group_ids}
+    if not group_ids:
+        return tags_by_group
+
+    visible_cases = group_test_cases_cte()
+    rows = (
+        db.query(
+            visible_cases.c.group_id,
+            TestCaseTag.id,
+            TestCaseTag.category,
+            TestCaseTag.name,
+            func.count(func.distinct(visible_cases.c.test_case_id)).label("test_case_count"),
+        )
+        .join(
+            TestCaseTagAssignment,
+            TestCaseTagAssignment.test_case_id == visible_cases.c.test_case_id,
+        )
+        .join(TestCaseTag, TestCaseTag.id == TestCaseTagAssignment.tag_id)
+        .filter(visible_cases.c.group_id.in_(group_ids))
+        .group_by(
+            visible_cases.c.group_id,
+            TestCaseTag.id,
+            TestCaseTag.category,
+            TestCaseTag.name,
+        )
+        .order_by(
+            visible_cases.c.group_id,
+            TestCaseTag.category,
+            TestCaseTag.name,
+            TestCaseTag.id,
+        )
+        .all()
+    )
+    for row in rows:
+        tags_by_group[row.group_id].append(
+            SuiteGroupTagRead(
+                id=row.id,
+                category=row.category,
+                name=row.name,
+                test_case_count=int(row.test_case_count),
+            )
+        )
+    return tags_by_group
+
+
+def _load_options():
+    return (
+        selectinload(SuiteGroup.memberships),
+        selectinload(SuiteGroup.test_case_memberships),
+        selectinload(SuiteGroup.incoming_relations),
+        selectinload(SuiteGroup.outgoing_relations),
+    )
+
+
+def _attach_group_tags(db: Session, groups: list[SuiteGroup]) -> list[SuiteGroup]:
+    tags_by_group = group_tags_by_id(db, [group.id for group in groups])
+    for group in groups:
+        group.tags = tags_by_group[group.id]
+    return groups
+
+
+def list_groups(db: Session) -> list[SuiteGroup]:
+    groups = (
+        db.query(SuiteGroup)
+        .options(*_load_options())
         .order_by(SuiteGroup.sort_order, SuiteGroup.name, SuiteGroup.id)
         .all()
     )
+    return _attach_group_tags(db, groups)
 
 
 def get_group(db: Session, group_id: int) -> SuiteGroup:
     group = (
         db.query(SuiteGroup)
-        .options(
-            selectinload(SuiteGroup.memberships),
-            selectinload(SuiteGroup.test_case_memberships),
-        )
+        .options(*_load_options())
         .filter(SuiteGroup.id == group_id)
         .first()
     )
     if group is None:
         raise not_found("Skupina suit")
-    return group
+    return _attach_group_tags(db, [group])[0]
 
 
 def _normalize_name(name: str) -> str:
@@ -55,50 +161,9 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
-def _validate_parent(db: Session, parent_group_id: int | None) -> SuiteGroup | None:
-    if parent_group_id is None:
-        return None
-    return get_group(db, parent_group_id)
-
-
-def _ensure_unique_name(
-    db: Session,
-    parent_group_id: int | None,
-    name: str,
-    exclude_id: int | None = None,
-) -> None:
-    query = db.query(SuiteGroup).filter(func.lower(SuiteGroup.name) == name.casefold())
-    if parent_group_id is None:
-        query = query.filter(SuiteGroup.parent_group_id.is_(None))
-    else:
-        query = query.filter(SuiteGroup.parent_group_id == parent_group_id)
-    if exclude_id is not None:
-        query = query.filter(SuiteGroup.id != exclude_id)
-    if query.first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Skupina se stejným názvem už na této úrovni existuje.",
-        )
-
-
-def _is_descendant(db: Session, group: SuiteGroup, candidate_parent_id: int) -> bool:
-    current = db.get(SuiteGroup, candidate_parent_id)
-    visited: set[int] = set()
-    while current is not None and current.id not in visited:
-        if current.id == group.id:
-            return True
-        visited.add(current.id)
-        current = db.get(SuiteGroup, current.parent_group_id) if current.parent_group_id else None
-    return False
-
-
 def create_group(db: Session, payload: SuiteGroupCreate) -> SuiteGroup:
-    name = _normalize_name(payload.name)
-    _validate_parent(db, payload.parent_group_id)
-    _ensure_unique_name(db, payload.parent_group_id, name)
     group = SuiteGroup(
-        parent_group_id=payload.parent_group_id,
-        name=name,
+        name=_normalize_name(payload.name),
         description=payload.description,
         sort_order=payload.sort_order,
     )
@@ -109,27 +174,8 @@ def create_group(db: Session, payload: SuiteGroupCreate) -> SuiteGroup:
 
 def update_group(db: Session, group_id: int, payload: SuiteGroupUpdate) -> SuiteGroup:
     group = get_group(db, group_id)
-    parent_group_id = (
-        payload.parent_group_id
-        if "parent_group_id" in payload.model_fields_set
-        else group.parent_group_id
-    )
-    if parent_group_id == group.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Skupina nemůže být vlastním rodičem.",
-        )
-    if parent_group_id is not None and _is_descendant(db, group, parent_group_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Skupinu nelze přesunout pod vlastní podskupinu.",
-        )
-    _validate_parent(db, parent_group_id)
-
-    name = _normalize_name(payload.name) if payload.name is not None else group.name
-    _ensure_unique_name(db, parent_group_id, name, exclude_id=group.id)
-    group.parent_group_id = parent_group_id
-    group.name = name
+    if payload.name is not None:
+        group.name = _normalize_name(payload.name)
     if "description" in payload.model_fields_set:
         group.description = payload.description
     if payload.sort_order is not None:
@@ -140,13 +186,137 @@ def update_group(db: Session, group_id: int, payload: SuiteGroupUpdate) -> Suite
 
 def delete_group(db: Session, group_id: int) -> None:
     group = get_group(db, group_id)
-    if db.query(SuiteGroup.id).filter(SuiteGroup.parent_group_id == group.id).first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Skupinu s podskupinami nelze smazat.",
-        )
     db.delete(group)
     db.commit()
+
+
+def _lock_graph(db: Session) -> None:
+    db.query(SuiteGroup.id).order_by(SuiteGroup.id).with_for_update().all()
+
+
+def _validate_group_ids(db: Session, group_ids: list[int]) -> None:
+    existing_ids = (
+        {
+            group_id
+            for (group_id,) in db.query(SuiteGroup.id)
+            .filter(SuiteGroup.id.in_(group_ids))
+            .all()
+        }
+        if group_ids
+        else set()
+    )
+    missing_ids = sorted(set(group_ids) - existing_ids)
+    if missing_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Skupiny nebyly nalezeny: {', '.join(map(str, missing_ids))}.",
+        )
+
+
+def _would_create_cycle(
+    db: Session,
+    parent_group_id: int,
+    child_group_id: int,
+) -> bool:
+    if parent_group_id == child_group_id:
+        return True
+    adjacency: dict[int, set[int]] = {}
+    for parent_id, child_id in db.query(
+        SuiteGroupRelation.parent_group_id,
+        SuiteGroupRelation.child_group_id,
+    ).all():
+        adjacency.setdefault(parent_id, set()).add(child_id)
+    pending = [child_group_id]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if current == parent_group_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        pending.extend(adjacency.get(current, ()))
+    return False
+
+
+def add_child(
+    db: Session,
+    parent_group_id: int,
+    child_group_id: int,
+    sort_order: int = 0,
+) -> SuiteGroup:
+    _lock_graph(db)
+    _validate_group_ids(db, [parent_group_id, child_group_id])
+    if db.get(SuiteGroupRelation, (parent_group_id, child_group_id)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Skupina už je pod tímto rodičem vložená.",
+        )
+    if _would_create_cycle(db, parent_group_id, child_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vazba by vytvořila cyklus mezi skupinami.",
+        )
+    db.add(
+        SuiteGroupRelation(
+            parent_group_id=parent_group_id,
+            child_group_id=child_group_id,
+            sort_order=sort_order,
+        )
+    )
+    db.commit()
+    return get_group(db, parent_group_id)
+
+
+def remove_child(db: Session, parent_group_id: int, child_group_id: int) -> None:
+    relation = db.get(SuiteGroupRelation, (parent_group_id, child_group_id))
+    if relation is None:
+        raise not_found("Vazba skupin")
+    db.delete(relation)
+    db.commit()
+
+
+def set_group_parents(
+    db: Session,
+    group_id: int,
+    parent_group_ids: list[int],
+) -> SuiteGroup:
+    normalized_ids = list(dict.fromkeys(parent_group_ids))
+    if len(normalized_ids) != len(parent_group_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Seznam rodičů obsahuje duplicitní ID.",
+        )
+    _lock_graph(db)
+    _validate_group_ids(db, [group_id, *normalized_ids])
+
+    current = {
+        relation.parent_group_id: relation
+        for relation in db.query(SuiteGroupRelation)
+        .filter(SuiteGroupRelation.child_group_id == group_id)
+        .all()
+    }
+    for relation in current.values():
+        db.delete(relation)
+    db.flush()
+
+    for sort_order, parent_group_id in enumerate(normalized_ids):
+        if _would_create_cycle(db, parent_group_id, group_id):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vazba by vytvořila cyklus mezi skupinami.",
+            )
+        db.add(
+            SuiteGroupRelation(
+                parent_group_id=parent_group_id,
+                child_group_id=group_id,
+                sort_order=sort_order,
+            )
+        )
+        db.flush()
+    db.commit()
+    return get_group(db, group_id)
 
 
 def add_member(
@@ -207,59 +377,33 @@ def set_suite_groups(db: Session, suite_id: int, group_ids: list[int]) -> TestSu
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Seznam skupin obsahuje duplicitní ID.",
         )
-    existing_group_ids = {
-        group_id
-        for (group_id,) in db.query(SuiteGroup.id).filter(SuiteGroup.id.in_(normalized_ids)).all()
-    } if normalized_ids else set()
-    missing_ids = sorted(set(normalized_ids) - existing_group_ids)
-    if missing_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Skupiny nebyly nalezeny: {', '.join(map(str, missing_ids))}.",
-        )
+    _validate_group_ids(db, normalized_ids)
 
     current = {member.group_id: member for member in suite.group_memberships}
     for group_id, member in current.items():
-        if group_id not in existing_group_ids:
+        if group_id not in normalized_ids:
             db.delete(member)
     for sort_order, group_id in enumerate(normalized_ids):
         member = current.get(group_id)
         if member is None:
-            db.add(SuiteGroupMember(group_id=group_id, suite_id=suite.id, sort_order=sort_order))
+            db.add(
+                SuiteGroupMember(
+                    group_id=group_id,
+                    suite_id=suite.id,
+                    sort_order=sort_order,
+                )
+            )
         else:
             member.sort_order = sort_order
     db.commit()
     db.refresh(suite)
+    suite.test_case_count = (
+        db.query(func.count(TestCase.id))
+        .filter(TestCase.suite_id == suite.id)
+        .scalar()
+        or 0
+    )
     return suite
-
-
-def get_group_tree(db: Session) -> list[dict]:
-    groups = list_groups(db)
-    nodes = {group.id: {"group": group, "children": []} for group in groups}
-    roots: list[dict] = []
-    for group in groups:
-        node = nodes[group.id]
-        if group.parent_group_id in nodes:
-            nodes[group.parent_group_id]["children"].append(node)
-        else:
-            roots.append(node)
-
-    def serialize(node: dict) -> dict:
-        group = node["group"]
-        return {
-            "id": group.id,
-            "parent_group_id": group.parent_group_id,
-            "name": group.name,
-            "description": group.description,
-            "sort_order": group.sort_order,
-            "created_at": group.created_at,
-            "updated_at": group.updated_at,
-            "members": group.memberships,
-            "test_case_members": group.test_case_memberships,
-            "children": [serialize(child) for child in node["children"]],
-        }
-
-    return [serialize(root) for root in roots]
 
 
 def set_group_test_cases(
@@ -274,12 +418,16 @@ def set_group_test_cases(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Seznam test cases obsahuje duplicitní ID.",
         )
-    existing_ids = {
-        test_case_id
-        for (test_case_id,) in db.query(TestCase.id).filter(
-            TestCase.id.in_(normalized_ids)
-        ).all()
-    } if normalized_ids else set()
+    existing_ids = (
+        {
+            test_case_id
+            for (test_case_id,) in db.query(TestCase.id)
+            .filter(TestCase.id.in_(normalized_ids))
+            .all()
+        }
+        if normalized_ids
+        else set()
+    )
     missing_ids = sorted(set(normalized_ids) - existing_ids)
     if missing_ids:
         raise HTTPException(
@@ -288,8 +436,7 @@ def set_group_test_cases(
         )
 
     current = {
-        member.test_case_id: member
-        for member in group.test_case_memberships
+        member.test_case_id: member for member in group.test_case_memberships
     }
     group.test_case_memberships[:] = [
         current[test_case_id]

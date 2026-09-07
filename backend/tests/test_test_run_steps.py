@@ -67,6 +67,7 @@ def test_information_step_has_note_and_is_not_executable(client: TestClient) -> 
         "/api/test-cases",
         headers=headers,
         json={
+            "suite_id": 1,
             "code": "TC-STEP-TYPES",
             "title": "Mixed step types",
             "steps": [

@@ -7,81 +7,41 @@ def auth_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login(client)}"}
 
 
-def create_suite(client: TestClient, headers: dict[str, str], name: str, parent_suite_id: int | None = None) -> dict:
+def create_suite(client: TestClient, headers: dict[str, str], name: str) -> dict:
     response = client.post(
         "/api/test-suites",
         headers=headers,
-        json={"name": name, "parent_suite_id": parent_suite_id},
+        json={"name": name},
     )
     assert response.status_code == 201
     return response.json()
 
 
-def test_suite_cannot_be_moved_under_own_descendant(client: TestClient) -> None:
+def test_suites_are_flat_and_tree_endpoints_are_removed(client: TestClient) -> None:
     headers = auth_headers(client)
-    parent = create_suite(client, headers, "Parent")
-    child = create_suite(client, headers, "Child", parent["id"])
+    suite = create_suite(client, headers, "Platby")
 
-    response = client.put(
-        f"/api/test-suites/{parent['id']}",
-        headers=headers,
-        json={"parent_suite_id": child["id"]},
+    assert "parent_suite_id" not in suite
+    assert "path" not in suite
+    assert "level" not in suite
+    assert suite["test_case_count"] == 0
+
+    assert client.get("/api/test-suites/tree", headers=headers).status_code != 200
+    assert (
+        client.get(
+            f"/api/test-suites/{suite['id']}/children",
+            headers=headers,
+        ).status_code
+        == 404
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Suite nelze přesunout pod vlastní podstrom."
 
-
-def test_suite_move_recalculates_descendant_paths(client: TestClient) -> None:
+def test_suite_counts_only_its_own_cases(client: TestClient) -> None:
     headers = auth_headers(client)
-    target_parent = create_suite(client, headers, "Target")
-    parent = create_suite(client, headers, "Parent")
-    child = create_suite(client, headers, "Child", parent["id"])
+    first = create_suite(client, headers, "Platby")
+    second = create_suite(client, headers, "Karty")
 
-    response = client.put(
-        f"/api/test-suites/{parent['id']}",
-        headers=headers,
-        json={"name": "Moved", "parent_suite_id": target_parent["id"]},
-    )
-
-    assert response.status_code == 200
-    moved = response.json()
-    assert moved["path"] == "/Target/Moved"
-    assert moved["level"] == 1
-
-    child_response = client.get(f"/api/test-suites/{child['id']}", headers=headers)
-    assert child_response.status_code == 200
-    moved_child = child_response.json()
-    assert moved_child["path"] == "/Target/Moved/Child"
-    assert moved_child["level"] == 2
-
-
-def test_delete_empty_suite(client: TestClient) -> None:
-    headers = auth_headers(client)
-    suite = create_suite(client, headers, "Empty")
-
-    response = client.delete(f"/api/test-suites/{suite['id']}", headers=headers)
-
-    assert response.status_code == 204
-
-
-def test_delete_suite_with_child_is_rejected(client: TestClient) -> None:
-    headers = auth_headers(client)
-    parent = create_suite(client, headers, "Parent")
-    create_suite(client, headers, "Child", parent["id"])
-
-    response = client.delete(f"/api/test-suites/{parent['id']}", headers=headers)
-
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Nelze smazat suitu, která obsahuje podsuity."
-
-
-def test_suite_searches_path_and_returns_direct_and_recursive_counts(client: TestClient) -> None:
-    headers = auth_headers(client)
-    parent = create_suite(client, headers, "Platby")
-    child = create_suite(client, headers, "Karty", parent["id"])
-
-    for code, suite_id in (("TC-PARENT", parent["id"]), ("TC-CHILD", child["id"])):
+    for code, suite_id in (("TC-PAY", first["id"]), ("TC-CARD", second["id"])):
         response = client.post(
             "/api/test-cases",
             headers=headers,
@@ -89,19 +49,84 @@ def test_suite_searches_path_and_returns_direct_and_recursive_counts(client: Tes
         )
         assert response.status_code == 201
 
-    response = client.get("/api/test-suites", headers=headers)
-    assert response.status_code == 200
-    suites = {suite["id"]: suite for suite in response.json()}
-    assert suites[parent["id"]]["direct_test_case_count"] == 1
-    assert suites[parent["id"]]["total_test_case_count"] == 2
-    assert suites[child["id"]]["direct_test_case_count"] == 1
-    assert suites[child["id"]]["total_test_case_count"] == 1
+    suites = {
+        suite["id"]: suite
+        for suite in client.get("/api/test-suites", headers=headers).json()
+    }
+    assert suites[first["id"]]["test_case_count"] == 1
+    assert suites[second["id"]]["test_case_count"] == 1
 
     search = client.get(
         "/api/test-suites/search",
         headers=headers,
-        params={"q": "Platby/Karty"},
+        params={"q": "Karty"},
     )
     assert search.status_code == 200
-    assert [suite["id"] for suite in search.json()] == [child["id"]]
-    assert search.json()[0]["total_test_case_count"] == 1
+    assert [suite["id"] for suite in search.json()] == [second["id"]]
+
+
+def test_empty_suite_can_be_deleted_but_suite_with_cases_cannot(
+    client: TestClient,
+) -> None:
+    headers = auth_headers(client)
+    empty = create_suite(client, headers, "Prázdná")
+    used = create_suite(client, headers, "Použitá")
+    created = client.post(
+        "/api/test-cases",
+        headers=headers,
+        json={"code": "TC-USED", "title": "Použitý test", "suite_id": used["id"]},
+    )
+    assert created.status_code == 201
+
+    assert (
+        client.delete(f"/api/test-suites/{empty['id']}", headers=headers).status_code
+        == 204
+    )
+    rejected = client.delete(f"/api/test-suites/{used['id']}", headers=headers)
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"] == "Nelze smazat suitu, která obsahuje test cases."
+
+
+def test_test_case_requires_suite_on_create_and_update(client: TestClient) -> None:
+    headers = auth_headers(client)
+    missing = client.post(
+        "/api/test-cases",
+        headers=headers,
+        json={"code": "TC-NO-SUITE", "title": "Bez suity"},
+    )
+    assert missing.status_code == 422
+
+    suite = create_suite(client, headers, "Povinná suita")
+    created = client.post(
+        "/api/test-cases",
+        headers=headers,
+        json={"code": "TC-SUITE", "title": "Se suitou", "suite_id": suite["id"]},
+    )
+    assert created.status_code == 201
+
+    cleared = client.put(
+        f"/api/test-cases/{created.json()['id']}",
+        headers=headers,
+        json={"suite_id": None},
+    )
+    assert cleared.status_code == 422
+    assert (
+        client.get(
+            f"/api/test-cases/{created.json()['id']}",
+            headers=headers,
+        ).json()["suite_id"]
+        == suite["id"]
+    )
+
+
+def test_duplicate_suite_names_remain_unambiguous_by_id(client: TestClient) -> None:
+    headers = auth_headers(client)
+    first = create_suite(client, headers, "Smoke")
+    second = create_suite(client, headers, "Smoke")
+
+    assert first["id"] != second["id"]
+    assert [suite["id"] for suite in client.get(
+        "/api/test-suites/search",
+        headers=headers,
+        params={"q": "Smoke"},
+    ).json()] == [first["id"], second["id"]]

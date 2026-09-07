@@ -12,6 +12,7 @@ def create_test_case(client: TestClient, headers: dict[str, str], code: str = "T
         "/api/test-cases",
         headers=headers,
         json={
+            "suite_id": 1,
             "code": code,
             "title": "Run workflow case",
             "status": "ready",
@@ -102,3 +103,22 @@ def test_archived_run_cannot_be_executed(client: TestClient) -> None:
     )
     assert result_response.status_code == 400
     assert result_response.json()["detail"] == "Archivovaný test run nelze exekuovat."
+
+
+def test_test_run_list_uses_lightweight_case_contract(client: TestClient) -> None:
+    headers = auth_headers(client)
+    test_case = create_test_case(client, headers, code="TC-RUN-LIST")
+    test_run = create_test_run(client, headers)
+    add_case_to_run(client, headers, test_run["id"], test_case["id"])
+
+    response = client.get("/api/test-runs", headers=headers)
+
+    assert response.status_code == 200
+    listed_case = response.json()[0]["test_run_cases"][0]
+    assert set(listed_case) == {
+        "id",
+        "test_run_id",
+        "test_case_id",
+        "assigned_to",
+        "result",
+    }

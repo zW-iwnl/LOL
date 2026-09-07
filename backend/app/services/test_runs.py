@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import and_, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
@@ -34,19 +35,14 @@ def list_test_runs(
     limit: int = 50,
     offset: int = 0,
 ) -> list[TestRun]:
-    query = (
-        db.query(TestRun)
-        .options(
-            selectinload(TestRun.test_run_cases).selectinload(TestRunCase.case_attempts).selectinload(TestRunCaseAttempt.step_results)
-        )
-    )
+    query = db.query(TestRun).options(selectinload(TestRun.test_run_cases))
     if q:
         query = query.filter(TestRun.name.ilike(f"%{q.strip()}%"))
     if status_filter:
         query = query.filter(TestRun.status == status_filter)
     if environment:
         query = query.filter(func.lower(TestRun.environment) == environment.strip().lower())
-    return query.order_by(TestRun.created_at.desc()).offset(offset).limit(limit).all()
+    return query.order_by(TestRun.created_at.desc(), TestRun.id.desc()).offset(offset).limit(limit).all()
 
 
 def get_test_run(db: Session, test_run_id: int) -> TestRun:
@@ -98,30 +94,32 @@ def get_execution(db: Session, test_run_id: int, *, attempt_id: int | None = Non
         current = attempts_by_case.get(item.test_run_case_id)
         if current is None or item.attempt_number > current.attempt_number:
             attempts_by_case[item.test_run_case_id] = item
+    history_by_case: dict[int, list[dict]] = {}
+    for run_attempt in test_run.attempts:
+        for item in run_attempt.case_attempts:
+            history_by_case.setdefault(item.test_run_case_id, []).append(
+                {
+                    "id": item.id,
+                    "test_run_attempt_id": run_attempt.id,
+                    "test_run_attempt_number": run_attempt.attempt_number,
+                    "test_run_case_id": item.test_run_case_id,
+                    "attempt_number": item.attempt_number,
+                    "result": item.result,
+                    "comment": item.comment,
+                    "executed_by": item.executed_by,
+                    "executed_at": item.executed_at,
+                    "step_results": item.step_results,
+                    "created_at": item.created_at,
+                    "updated_at": item.updated_at,
+                }
+            )
+
     execution_cases = []
     for run_case in test_run.test_run_cases:
         case_attempt = attempts_by_case.get(run_case.id)
         if case_attempt is None:
             continue
-        case_history = [
-            {
-                "id": item.id,
-                "test_run_attempt_id": run_attempt.id,
-                "test_run_attempt_number": run_attempt.attempt_number,
-                "test_run_case_id": item.test_run_case_id,
-                "attempt_number": item.attempt_number,
-                "result": item.result,
-                "comment": item.comment,
-                "executed_by": item.executed_by,
-                "executed_at": item.executed_at,
-                "step_results": item.step_results,
-                "created_at": item.created_at,
-                "updated_at": item.updated_at,
-            }
-            for run_attempt in test_run.attempts
-            for item in run_attempt.case_attempts
-            if item.test_run_case_id == run_case.id
-        ]
+        case_history = history_by_case.get(run_case.id, [])
         case_history.sort(key=lambda item: (item["test_run_attempt_number"], item["attempt_number"]))
         execution_cases.append(
             {
@@ -155,7 +153,8 @@ def get_execution(db: Session, test_run_id: int, *, attempt_id: int | None = Non
 
 
 def list_attempts(db: Session, test_run_id: int) -> list[TestRunAttempt]:
-    get_test_run(db, test_run_id)
+    if db.get(TestRun, test_run_id) is None:
+        raise not_found("Test run")
     return (
         db.query(TestRunAttempt)
         .filter(TestRunAttempt.test_run_id == test_run_id)
@@ -189,6 +188,15 @@ def create_test_run(db: Session, payload: TestRunCreate, current_user: User) -> 
 def update_test_run(db: Session, test_run_id: int, payload: TestRunUpdate) -> TestRun:
     test_run = get_test_run(db, test_run_id)
     apply_updates(test_run, payload)
+    if (
+        test_run.planned_start is not None
+        and test_run.planned_end is not None
+        and test_run.planned_end < test_run.planned_start
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Plánovaný konec nesmí být před plánovaným začátkem.",
+        )
     if payload.status is not None and payload.status != "archived":
         attempt = _latest_attempt(db, test_run_id)
         attempt.status = payload.status
@@ -257,7 +265,14 @@ def _latest_attempt(db: Session, test_run_id: int) -> TestRunAttempt:
 
 
 def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesRequest, current_user: User | None = None) -> TestRun:
-    test_run = get_test_run(db, test_run_id)
+    test_run = (
+        db.query(TestRun)
+        .filter(TestRun.id == test_run_id)
+        .with_for_update()
+        .first()
+    )
+    if test_run is None:
+        raise not_found("Test run")
     if test_run.status == "archived":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivovaný test run nelze upravovat.")
     active_attempt = _latest_attempt(db, test_run_id)
@@ -286,8 +301,10 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
         )
 
     existing_ids = {
-        row.test_case_id
-        for row in db.query(TestRunCase).filter(TestRunCase.test_run_id == test_run_id).all()
+        test_case_id
+        for (test_case_id,) in db.query(TestRunCase.test_case_id)
+        .filter(TestRunCase.test_run_id == test_run_id)
+        .all()
     }
     duplicate_ids = sorted(set(payload.test_case_ids).intersection(existing_ids))
     if duplicate_ids:
@@ -296,8 +313,8 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
             detail=f"Test cases už jsou v test runu: {duplicate_ids}",
         )
 
-    for test_case in test_cases:
-        run_case = TestRunCase(
+    run_cases = [
+        TestRunCase(
             test_run_id=test_run_id,
             test_case_id=test_case.id,
             assigned_to=payload.assigned_to,
@@ -305,20 +322,30 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
             test_case_version=test_case.version,
             test_case_snapshot=_snapshot_test_case(test_case),
         )
-        db.add(run_case)
+        for test_case in test_cases
+    ]
+    try:
+        db.add_all(run_cases)
         db.flush()
-        case_attempt = TestRunCaseAttempt(
-            test_run_attempt_id=active_attempt.id,
-            test_run_case_id=run_case.id,
-            attempt_number=1,
-            result="not_run",
-        )
-        db.add(case_attempt)
+        case_attempts = [
+            TestRunCaseAttempt(
+                test_run_attempt_id=active_attempt.id,
+                test_run_case_id=run_case.id,
+                attempt_number=1,
+                result="not_run",
+            )
+            for run_case in run_cases
+        ]
+        db.add_all(case_attempts)
         db.flush()
-        for step in test_case.steps:
-            if step.step_type != "test":
-                continue
-            db.add(
+        step_results = []
+        for test_case, run_case, case_attempt in zip(
+            test_cases,
+            run_cases,
+            case_attempts,
+            strict=True,
+        ):
+            step_results.extend(
                 TestRunStepResult(
                     test_run_case_id=run_case.id,
                     test_run_case_attempt_id=case_attempt.id,
@@ -326,8 +353,17 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
                     step_order=step.step_order,
                     result="not_run",
                 )
+                for step in test_case.steps
+                if step.step_type == "test"
             )
-    db.commit()
+        db.add_all(step_results)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Některý test case už je v test runu.",
+        ) from exc
     return get_test_run(db, test_run_id)
 
 
@@ -404,19 +440,28 @@ def _snapshot_test_steps(run_case: TestRunCase) -> list[dict]:
 
 
 def _latest_case_attempts(db: Session, test_run_attempt_id: int) -> dict[int, TestRunCaseAttempt]:
+    latest_numbers = (
+        db.query(
+            TestRunCaseAttempt.test_run_case_id.label("test_run_case_id"),
+            func.max(TestRunCaseAttempt.attempt_number).label("attempt_number"),
+        )
+        .filter(TestRunCaseAttempt.test_run_attempt_id == test_run_attempt_id)
+        .group_by(TestRunCaseAttempt.test_run_case_id)
+        .subquery()
+    )
     rows = (
         db.query(TestRunCaseAttempt)
-        .filter(TestRunCaseAttempt.test_run_attempt_id == test_run_attempt_id)
-        .order_by(
-            TestRunCaseAttempt.test_run_case_id,
-            TestRunCaseAttempt.attempt_number.desc(),
+        .join(
+            latest_numbers,
+            and_(
+                latest_numbers.c.test_run_case_id == TestRunCaseAttempt.test_run_case_id,
+                latest_numbers.c.attempt_number == TestRunCaseAttempt.attempt_number,
+            ),
         )
+        .filter(TestRunCaseAttempt.test_run_attempt_id == test_run_attempt_id)
         .all()
     )
-    latest: dict[int, TestRunCaseAttempt] = {}
-    for item in rows:
-        latest.setdefault(item.test_run_case_id, item)
-    return latest
+    return {item.test_run_case_id: item for item in rows}
 
 
 def create_case_rerun(
@@ -424,7 +469,12 @@ def create_case_rerun(
     case_attempt_id: int,
     current_user: User,
 ) -> dict:
-    previous_case_attempt = db.get(TestRunCaseAttempt, case_attempt_id)
+    previous_case_attempt = (
+        db.query(TestRunCaseAttempt)
+        .filter(TestRunCaseAttempt.id == case_attempt_id)
+        .with_for_update()
+        .first()
+    )
     if previous_case_attempt is None:
         raise not_found("Test run case pokus")
 
@@ -609,9 +659,29 @@ def update_result(
     payload: UpdateResultRequest,
     current_user: User,
 ) -> TestRunCase:
-    case_attempt = db.get(TestRunCaseAttempt, case_attempt_id)
+    case_attempt = (
+        db.query(TestRunCaseAttempt)
+        .filter(TestRunCaseAttempt.id == case_attempt_id)
+        .with_for_update()
+        .first()
+    )
     if case_attempt is None:
         raise not_found("Test run case pokus")
+
+    latest_case_attempt = (
+        db.query(TestRunCaseAttempt.id)
+        .filter(
+            TestRunCaseAttempt.test_run_attempt_id == case_attempt.test_run_attempt_id,
+            TestRunCaseAttempt.test_run_case_id == case_attempt.test_run_case_id,
+        )
+        .order_by(TestRunCaseAttempt.attempt_number.desc())
+        .first()
+    )
+    if latest_case_attempt is None or latest_case_attempt[0] != case_attempt.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Historický pokus test case nelze upravovat.",
+        )
 
     run_case = case_attempt.test_run_case
     attempt = case_attempt.test_run_attempt

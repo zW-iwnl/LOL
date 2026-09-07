@@ -1,4 +1,4 @@
-import { FileCheck2, Folder, LoaderCircle, Search, X } from "lucide-react";
+import { FileCheck2, Folder, Layers3, LoaderCircle, Search, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -17,12 +17,14 @@ type RepositorySearchProps = {
   onQueryChange: (query: string) => void;
   onTypeChange: (type: RepositorySearchType) => void;
   onSelectSuite: (suiteId: number) => void;
+  onSelectGroup: (groupId: number) => void;
   onSelectTestCase: (testCaseId: number, suiteId: number | null) => void;
 };
 
 const typeOptions: Array<{ value: RepositorySearchType; label: string }> = [
   { value: "all", label: "Vše" },
   { value: "suites", label: "Suity" },
+  { value: "groups", label: "Skupiny" },
   { value: "cases", label: "Test cases" },
 ];
 
@@ -34,6 +36,7 @@ export function RepositorySearch({
   objectTypeIds = [],
   filterControls,
   onQueryChange,
+  onSelectGroup,
   onTypeChange,
   onSelectSuite,
   onSelectTestCase,
@@ -94,10 +97,13 @@ export function RepositorySearch({
       <div className="border-b border-slate-200 p-4">
         <div>
           <h2 className="font-semibold text-slate-900">Vyhledávání a filtry</h2>
-          <p className="mt-1 text-xs text-slate-500">Text a klasifikační filtry se kombinují do jednoho výsledku.</p>
+          <p className="mt-1 text-xs text-slate-500">Suity i skupiny automaticky zahrnují tagy svých test casů.</p>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_repeat(3,minmax(160px,1fr))]">
+        <div className={filterControls
+          ? "mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_repeat(3,minmax(160px,1fr))]"
+          : "mt-4"}
+        >
           <label className="block text-sm">
             <span className="font-medium">Vyhledat</span>
             <span className="relative mt-1 block">
@@ -107,7 +113,7 @@ export function RepositorySearch({
                 className="w-full rounded-md border border-slate-200 bg-white py-2 pl-8 pr-8 text-sm"
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="Suite, kód nebo název test case"
+                placeholder="Suita, skupina, tag, kód nebo název test case"
               />
               {query && (
                 <button
@@ -125,10 +131,11 @@ export function RepositorySearch({
           {filterControls}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1">
+        <div aria-label="Typ výsledků hledání" className="mt-3 flex flex-wrap items-center gap-1" role="group">
           <span className="mr-1 text-xs font-medium text-slate-500">Hledat v:</span>
           {typeOptions.map((option) => (
             <button
+              aria-pressed={type === option.value}
               key={option.value}
               className={type === option.value
                 ? "rounded-md bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700"
@@ -146,7 +153,7 @@ export function RepositorySearch({
       </div>
 
       {active && (
-        <div className="p-2" aria-live="polite">
+        <div className="max-h-[420px] overflow-y-auto border-t border-slate-100 p-2" aria-live="polite">
           {loading && (
             <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-slate-500">
               <LoaderCircle className="animate-spin" size={16} /> Hledám…
@@ -171,8 +178,37 @@ export function RepositorySearch({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{item.label}</span>
                     <span className="block truncate text-xs text-slate-500">
-                      {item.path} · {item.test_case_count} testů
+                      {item.test_case_count} testů · {item.group_ids.length} skupin
                     </span>
+                    {item.tags.length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {item.tags.map((tag) => (
+                          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800" key={tag.id}>{tag.name} ({tag.test_case_count})</span>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ) : item.type === "suite_group" ? (
+                <button
+                  key={`group-${item.id}`}
+                  className="flex w-full gap-2 rounded-md px-3 py-2 text-left hover:bg-slate-50"
+                  onClick={() => onSelectGroup(item.id)}
+                  type="button"
+                >
+                  <Layers3 className="mt-0.5 shrink-0 text-violet-600" size={16} aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{item.label}</span>
+                    <span className="block truncate text-xs text-slate-500">
+                      Skupina · {item.test_case_count} test cases
+                    </span>
+                    {item.tags.length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {item.tags.map((tag) => (
+                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-800" key={tag.id}>{tag.name} ({tag.test_case_count})</span>
+                        ))}
+                      </span>
+                    )}
                   </span>
                 </button>
               ) : (
@@ -187,7 +223,7 @@ export function RepositorySearch({
                     <span className="block truncate text-sm">
                       <strong className="text-cyan-700">{item.code}</strong> {item.title}
                     </span>
-                    <span className="block truncate text-xs text-slate-500">{item.suite_path ?? "Počátek vesmíru"}</span>
+                    <span className="block truncate text-xs text-slate-500">{item.suite_name} · {item.status}</span>
                     <span className="mt-1 flex flex-wrap gap-1">
                       {item.tags.map((tag) => (
                           <span key={tag.id} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">

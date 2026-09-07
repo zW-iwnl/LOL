@@ -42,7 +42,7 @@ def test_authenticated_user_can_list_test_suites(client: TestClient) -> None:
     response = client.get("/api/test-suites", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert [suite["name"] for suite in response.json()] == ["Výchozí test suite"]
 
 
 def test_authenticated_user_can_list_all_test_cases(client: TestClient) -> None:

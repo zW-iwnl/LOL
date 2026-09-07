@@ -11,7 +11,8 @@ import {
   updateTestRunCase,
   updateTestRun,
   type TestRun,
-  type TestRunCase,
+  type TestRunCaseListItem,
+  type TestRunListItem,
   type TestRunCreatePayload,
   type TestRunStatus,
 } from "../api/testRuns";
@@ -85,7 +86,7 @@ function toApiDateTime(value: string) {
   return value ? new Date(value).toISOString() : null;
 }
 
-function resultSummary(cases: TestRunCase[]) {
+function resultSummary(cases: Array<{ result: TestRunCaseListItem["result"] }>) {
   const counts = {
     passed: 0,
     failed: 0,
@@ -101,7 +102,7 @@ function resultSummary(cases: TestRunCase[]) {
   return { counts, executed, total: cases.length, passRate };
 }
 
-function toForm(run: TestRun): TestRunFormState {
+function toForm(run: TestRun | TestRunListItem): TestRunFormState {
   return {
     name: run.name,
     description: run.description ?? "",
@@ -195,7 +196,7 @@ export function TestRunsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalMode, setModalMode] = useState<ModalMode | null>(null);
   const [createStep, setCreateStep] = useState<CreateStep>("details");
-  const [selectedRun, setSelectedRun] = useState<TestRun | null>(null);
+  const [selectedRun, setSelectedRun] = useState<TestRun | TestRunListItem | null>(null);
   const [form, setForm] = useState<TestRunFormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -266,14 +267,14 @@ export function TestRunsPage() {
     setModalMode("create");
   }
 
-  function openEdit(run: TestRun) {
+  function openEdit(run: TestRunListItem) {
     setSelectedRun(run);
     setForm(toForm(run));
     setFormError(null);
     setModalMode("edit");
   }
 
-  function openDetail(run: TestRun) {
+  function openDetail(run: TestRunListItem) {
     setSelectedRun(run);
     setForm(toForm(run));
     setFormError(null);
@@ -405,7 +406,7 @@ export function TestRunsPage() {
     setSelectedCaseIds((current) => Array.from(new Set([...current, ...filteredAvailableIds])));
   }
 
-  async function handleAssignRunCase(runCase: TestRunCase, value: string) {
+  async function handleAssignRunCase(runCase: TestRunCaseListItem, value: string) {
     setSaving(true);
     setFormError(null);
     try {
@@ -418,7 +419,7 @@ export function TestRunsPage() {
     }
   }
 
-  async function handleRemoveRunCase(runCase: TestRunCase) {
+  async function handleRemoveRunCase(runCase: TestRunCaseListItem) {
     const testCase = testCases.find((item) => item.id === runCase.test_case_id);
     const confirmed = window.confirm(`Odebrat ${testCase?.code ?? "test case"} z test runu?`);
     if (!confirmed) {
@@ -436,7 +437,7 @@ export function TestRunsPage() {
     }
   }
 
-  async function handleArchive(run: TestRun) {
+  async function handleArchive(run: TestRunListItem) {
     const confirmed = window.confirm(`Archivovat test run ${run.name}?`);
     if (!confirmed) {
       return;

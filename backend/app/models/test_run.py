@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -9,6 +9,17 @@ from app.models.mixins import TimestampMixin
 
 class TestRun(TimestampMixin, Base):
     __tablename__ = "test_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'completed', 'archived')",
+            name="ck_test_runs_status",
+        ),
+        CheckConstraint(
+            "planned_start IS NULL OR planned_end IS NULL OR planned_end >= planned_start",
+            name="ck_test_runs_planned_dates",
+        ),
+        Index("idx_test_runs_created_id", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

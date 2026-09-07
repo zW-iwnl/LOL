@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -9,6 +9,10 @@ class TestCaseTag(TimestampMixin, Base):
     __tablename__ = "test_case_tags"
     __table_args__ = (
         UniqueConstraint("category", "name", name="uq_test_case_tags_category_name"),
+        CheckConstraint(
+            "category IN ('business_area', 'application_domain', 'object_type')",
+            name="ck_test_case_tags_category",
+        ),
         Index("idx_test_case_tags_category", "category"),
     )
 

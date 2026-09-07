@@ -3,10 +3,19 @@ set -e
 
 export PYTHONPATH=/app
 
-until alembic upgrade head; do
-  echo "Database is not ready yet, retrying migrations..."
-  sleep 2
-done
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+  migration_attempt=1
+  migration_max_attempts="${MIGRATION_MAX_ATTEMPTS:-30}"
+  until alembic upgrade head; do
+    if [ "$migration_attempt" -ge "$migration_max_attempts" ]; then
+      echo "Database migration failed after $migration_attempt attempts." >&2
+      exit 1
+    fi
+    echo "Database is not ready yet, retrying migration ($migration_attempt/$migration_max_attempts)..."
+    migration_attempt=$((migration_attempt + 1))
+    sleep 2
+  done
+fi
 
 if [ "$SEED_DEMO_DATA" = "true" ]; then
   python scripts/seed_demo.py

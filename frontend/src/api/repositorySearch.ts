@@ -6,14 +6,18 @@ export type RepositorySearchTag = {
   name: string;
 };
 
+export type RepositorySuiteTag = RepositorySearchTag & {
+  test_case_count: number;
+};
+
 export type RepositoryTestCaseResult = {
   type: "test_case";
   id: number;
   label: string;
   code: string;
   title: string;
-  suite_id: number | null;
-  suite_path: string | null;
+  suite_id: number;
+  suite_name: string;
   status: TestCaseStatus;
   business_area: RepositorySearchTag | null;
   application_domain: RepositorySearchTag | null;
@@ -25,13 +29,24 @@ export type RepositoryTestSuiteResult = {
   type: "test_suite";
   id: number;
   label: string;
-  path: string;
+  group_ids: number[];
   test_case_count: number;
   is_active: boolean;
+  tags: RepositorySuiteTag[];
 };
 
-export type RepositorySearchItem = RepositoryTestCaseResult | RepositoryTestSuiteResult;
-export type RepositorySearchType = "all" | "suites" | "cases";
+export type RepositorySuiteGroupResult = {
+  type: "suite_group";
+  id: number;
+  label: string;
+  parent_ids: number[];
+  child_ids: number[];
+  test_case_count: number;
+  tags: RepositorySuiteTag[];
+};
+
+export type RepositorySearchItem = RepositoryTestCaseResult | RepositoryTestSuiteResult | RepositorySuiteGroupResult;
+export type RepositorySearchType = "all" | "suites" | "groups" | "cases";
 
 export type RepositorySearchParams = {
   query?: string;
@@ -53,6 +68,7 @@ export function searchRepository(params: RepositorySearchParams) {
   if (query) searchParams.set("q", query);
   if (params.type === "suites") searchParams.set("types", "test_suite");
   if (params.type === "cases") searchParams.set("types", "test_case");
+  if (params.type === "groups") searchParams.set("types", "suite_group");
   if (params.limit !== undefined) searchParams.set("limit", String(params.limit));
   for (const id of params.businessAreaIds ?? []) searchParams.append("business_area_id", String(id));
   for (const id of params.applicationDomainIds ?? []) searchParams.append("application_domain_id", String(id));

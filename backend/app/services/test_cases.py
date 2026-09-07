@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import TestCase, TestCaseTagAssignment, TestStep, User
+from app.models import TestCase, TestCaseTagAssignment, TestRunCase, TestStep, User
 from app.schemas.test_case import TestCaseCreate, TestCaseUpdate, TestStepCreate, TestStepUpdate
 from app.services.common import apply_updates, not_found
 from app.services.test_suites import get_suite
@@ -165,12 +165,34 @@ def update_test_case(
 
 def delete_test_case(db: Session, test_case_id: int) -> None:
     test_case = get_test_case(db, test_case_id)
-    db.delete(test_case)
+    has_execution_history = (
+        db.query(TestRunCase.id)
+        .filter(TestRunCase.test_case_id == test_case_id)
+        .first()
+        is not None
+    )
+    if has_execution_history or test_case.status != "draft":
+        test_case.status = "deprecated"
+    else:
+        db.delete(test_case)
     db.commit()
 
 
 def create_step(db: Session, test_case_id: int, payload: TestStepCreate, current_user: User | None = None) -> TestStep:
     test_case = get_test_case(db, test_case_id)
+    duplicate_order = (
+        db.query(TestStep.id)
+        .filter(
+            TestStep.test_case_id == test_case_id,
+            TestStep.step_order == payload.step_order,
+        )
+        .first()
+    )
+    if duplicate_order is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pořadí kroku už je v test case použité.",
+        )
     test_case.version += 1
     step = TestStep(**payload.model_dump(), test_case_id=test_case_id)
     db.add(step)
@@ -185,6 +207,21 @@ def update_step(db: Session, step_id: int, payload: TestStepUpdate, current_user
     if step is None:
         raise not_found("Test step")
     test_case = get_test_case(db, step.test_case_id)
+    if payload.step_order is not None and payload.step_order != step.step_order:
+        duplicate_order = (
+            db.query(TestStep.id)
+            .filter(
+                TestStep.test_case_id == step.test_case_id,
+                TestStep.step_order == payload.step_order,
+                TestStep.id != step.id,
+            )
+            .first()
+        )
+        if duplicate_order is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Pořadí kroku už je v test case použité.",
+            )
     changes = {}
     for field, new_value in payload.model_dump(exclude_unset=True).items():
         old_value = getattr(step, field)

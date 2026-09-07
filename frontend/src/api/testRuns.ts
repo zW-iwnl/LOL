@@ -53,7 +53,7 @@ export type TestRunCase = {
   updated_at: string;
 };
 
-export type TestRun = {
+type TestRunBase = {
   id: number;
   name: string;
   description: string | null;
@@ -67,7 +67,19 @@ export type TestRun = {
   created_by: number;
   created_at: string;
   updated_at: string;
+};
+
+export type TestRun = TestRunBase & {
   test_run_cases: TestRunCase[];
+};
+
+export type TestRunCaseListItem = Pick<
+  TestRunCase,
+  "id" | "test_run_id" | "test_case_id" | "assigned_to" | "result"
+>;
+
+export type TestRunListItem = TestRunBase & {
+  test_run_cases: TestRunCaseListItem[];
 };
 
 export type TestRunCreatePayload = {
@@ -135,7 +147,7 @@ function buildQuery(params: GetTestRunsParams = {}) {
 }
 
 export function getTestRuns(params: GetTestRunsParams = {}) {
-  return request<TestRun[]>(`/test-runs${buildQuery(params)}`);
+  return request<TestRunListItem[]>(`/test-runs${buildQuery(params)}`);
 }
 
 export function getTestRun(testRunId: number) {

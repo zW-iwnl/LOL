@@ -1,7 +1,12 @@
 from app.models.requirement import Requirement
 from app.models.test_case import TestCase
 from app.models.test_case_tag import TestCaseTag, TestCaseTagAssignment
-from app.models.suite_group import SuiteGroup, SuiteGroupMember, SuiteGroupTestCaseMember
+from app.models.suite_group import (
+    SuiteGroup,
+    SuiteGroupMember,
+    SuiteGroupRelation,
+    SuiteGroupTestCaseMember,
+)
 from app.models.test_run import TestRun
 from app.models.test_run_attempt import TestRunAttempt
 from app.models.test_run_case import TestRunCase
@@ -15,6 +20,7 @@ __all__ = [
     "Requirement",
     "SuiteGroup",
     "SuiteGroupMember",
+    "SuiteGroupRelation",
     "SuiteGroupTestCaseMember",
     "TestCase",
     "TestCaseTag",

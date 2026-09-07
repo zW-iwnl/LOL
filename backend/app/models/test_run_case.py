@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -9,7 +9,15 @@ from app.models.mixins import TimestampMixin
 
 class TestRunCase(TimestampMixin, Base):
     __tablename__ = "test_run_cases"
-    __table_args__ = (Index("idx_test_run_cases_test_run_id", "test_run_id"),)
+    __table_args__ = (
+        UniqueConstraint("test_run_id", "test_case_id", name="uq_test_run_cases_run_case"),
+        CheckConstraint(
+            "result IN ('not_run', 'passed', 'failed', 'blocked', 'skipped')",
+            name="ck_test_run_cases_result",
+        ),
+        CheckConstraint("test_case_version >= 1", name="ck_test_run_cases_version_positive"),
+        Index("idx_test_run_cases_test_case_id", "test_case_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     test_run_id: Mapped[int] = mapped_column(ForeignKey("test_runs.id"), nullable=False)

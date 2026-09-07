@@ -11,7 +11,7 @@ router = APIRouter(tags=["Repository Search"])
 def search_repository(
     db: DbSession,
     q: str | None = Query(default=None, max_length=200),
-    types: str = Query(default="test_case,test_suite", max_length=50),
+    types: str = Query(default="test_case,test_suite,suite_group", max_length=80),
     limit: int = Query(default=20, ge=1, le=50),
     business_area_id: list[int] | None = Query(default=None),
     application_domain_id: list[int] | None = Query(default=None),

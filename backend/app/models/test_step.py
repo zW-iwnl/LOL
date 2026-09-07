@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -7,6 +7,11 @@ from app.models.mixins import TimestampMixin
 
 class TestStep(TimestampMixin, Base):
     __tablename__ = "test_steps"
+    __table_args__ = (
+        UniqueConstraint("test_case_id", "step_order", name="uq_test_steps_case_order"),
+        CheckConstraint("step_order >= 1", name="ck_test_steps_order_positive"),
+        CheckConstraint("step_type IN ('test', 'information')", name="ck_test_steps_type"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     test_case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id"), nullable=False)

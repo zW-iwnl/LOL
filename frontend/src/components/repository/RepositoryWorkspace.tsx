@@ -1,148 +1,147 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { ChevronsDown, ChevronsUp, FolderPlus, RefreshCw } from "lucide-react";
-import { SuiteViewSwitcher } from "../test-suites/SuiteViewSwitcher";
-import type { SuiteViewMode } from "../test-suites/useSuiteViewState";
-import { RepositoryFoldersView } from "./RepositoryFoldersView";
-import { RepositoryNestedView } from "./RepositoryNestedView";
+import { FileCheck2, FolderKanban, Layers3, Tags } from "lucide-react";
+
+import type { SuiteGroup, TestCase, TestCaseTag, TestSuite } from "../../api/client";
+import { TestCaseTagSettings } from "../TestCaseTagSettings";
+import { RepositoryCasesView } from "./RepositoryCasesView";
 import { RepositoryGroupsView } from "./RepositoryGroupsView";
-import type { SuiteGroup, TestCaseTag } from "../../api/client";
-import type { RepositoryViewProps } from "./repositoryTypes";
-import {
-  readRepositoryExpansion,
-  repositoryExpansionStorageKey,
-  storeRepositoryExpansion,
-} from "./repositoryViewState";
+import { RepositorySuitesView } from "./RepositorySuitesView";
 
-const RepositoryMindMapView = lazy(() => import("./RepositoryMindMapView"));
-
-type RepositoryWorkspaceProps = Omit<RepositoryViewProps, "collapsedIds" | "rootCollapsed" | "onToggleCollapsed" | "onToggleRootCollapsed"> & {
-  view: SuiteViewMode;
-  preview: ReactNode | null;
-  onViewChange: (view: SuiteViewMode) => void;
-  groups: SuiteGroup[];
-  tags: TestCaseTag[];
-  onGroupsChanged: () => void | Promise<void>;
-};
+export type RepositoryTab = "groups" | "suites" | "cases" | "tags";
 
 export function RepositoryWorkspace({
-  view,
-  preview,
-  onViewChange,
+  activeTab,
+  onTabChange,
   groups,
+  suites,
+  testCases,
   tags,
-  onGroupsChanged,
-  ...viewProps
-}: RepositoryWorkspaceProps) {
-  const expansionKey = repositoryExpansionStorageKey(view);
-  const initialExpansion = readRepositoryExpansion(expansionKey);
-  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(
-    () => new Set(initialExpansion.collapsedIds),
-  );
-  const [rootCollapsed, setRootCollapsed] = useState(initialExpansion.rootCollapsed);
-
-  useEffect(() => {
-    const stored = readRepositoryExpansion(expansionKey);
-    setCollapsedIds(new Set(stored.collapsedIds));
-    setRootCollapsed(stored.rootCollapsed);
-  }, [expansionKey]);
-
-  function persistExpansion(nextCollapsedIds: ReadonlySet<number>, nextRootCollapsed: boolean) {
-    storeRepositoryExpansion(expansionKey, {
-      collapsedIds: [...nextCollapsedIds],
-      rootCollapsed: nextRootCollapsed,
-    });
-  }
-
-  function toggleCollapsed(suiteId: number) {
-    setCollapsedIds((current) => {
-      const next = new Set(current);
-      if (next.has(suiteId)) next.delete(suiteId);
-      else next.add(suiteId);
-      persistExpansion(next, rootCollapsed);
-      return next;
-    });
-  }
-
-  const commonProps: RepositoryViewProps = {
-    ...viewProps,
-    collapsedIds,
-    rootCollapsed,
-    onToggleCollapsed: toggleCollapsed,
-    onToggleRootCollapsed: () => {
-      setRootCollapsed((current) => {
-        const next = !current;
-        persistExpansion(collapsedIds, next);
-        return next;
-      });
-    },
-  };
+  selectedGroupId,
+  onSelectedGroupChange,
+  selectedSuiteId,
+  onChanged,
+  onCreateSuite,
+  onEditSuite,
+  onDeleteSuite,
+  onCreateCase,
+  onOpenCase,
+  onDeleteCase,
+  onMoveCase,
+  movingCaseId,
+}: {
+  activeTab: RepositoryTab;
+  onTabChange: (tab: RepositoryTab) => void;
+  groups: SuiteGroup[];
+  suites: TestSuite[];
+  testCases: TestCase[];
+  tags: TestCaseTag[];
+  selectedGroupId: number | null;
+  onSelectedGroupChange: (groupId: number | null) => void;
+  selectedSuiteId: number | null;
+  onChanged: () => void | Promise<void>;
+  onCreateSuite: () => void;
+  onEditSuite: (suite: TestSuite) => void;
+  onDeleteSuite: (suite: TestSuite) => void;
+  onCreateCase: (suiteId: number | null) => void;
+  onOpenCase: (testCase: TestCase) => void;
+  onDeleteCase: (testCase: TestCase) => void;
+  onMoveCase: (testCase: TestCase, suiteId: number) => void;
+  movingCaseId: number | null;
+}) {
+  const tabs = [
+    { id: "groups" as const, label: "Skupiny", icon: Layers3, count: groups.length },
+    { id: "suites" as const, label: "Test suity", icon: FolderKanban, count: suites.length },
+    { id: "cases" as const, label: "Test cases", icon: FileCheck2, count: testCases.length },
+    { id: "tags" as const, label: "Tagy", icon: Tags, count: tags.length },
+  ];
 
   return (
-    <section id="repository-workspace" className="relative overflow-hidden rounded-md border border-slate-200 bg-white lg:flex lg:h-[calc(100dvh-6rem)] lg:min-h-[560px] lg:flex-col">
-      <div className="flex shrink-0 flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="font-semibold">Suity a test cases</h2>
-          <p className="mt-1 text-xs text-slate-500">Navigace a obsah v jedné pracovní ploše</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SuiteViewSwitcher value={view} onChange={onViewChange} />
-          {view !== "mind-map" && (
-            <>
-              <button
-                className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
-                title="Sbalit všechny suity"
-                type="button"
-                onClick={() => {
-                  const nextCollapsedIds = new Set(view === "groups" ? groups.map((group) => group.id) : [...viewProps.model.suiteIndex.byId.keys()]);
-                  const nextRootCollapsed = view === "tree";
-                  setCollapsedIds(nextCollapsedIds);
-                  setRootCollapsed(nextRootCollapsed);
-                  persistExpansion(nextCollapsedIds, nextRootCollapsed);
-                }}
-              >
-                <ChevronsUp size={16} />
-              </button>
-              <button
-                className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
-                title="Rozbalit všechny suity"
-                type="button"
-                onClick={() => {
-                  const nextCollapsedIds = new Set<number>();
-                  setCollapsedIds(nextCollapsedIds);
-                  setRootCollapsed(false);
-                  persistExpansion(nextCollapsedIds, false);
-                }}
-              >
-                <ChevronsDown size={16} />
-              </button>
-            </>
-          )}
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            type="button"
-            onClick={() => viewProps.onCreateSuite(viewProps.selected)}
-          >
-            <FolderPlus size={16} /> Nová suita
-          </button>
-        </div>
-      </div>
+    <section id="repository-workspace" className="space-y-4">
+      <nav
+        aria-label="Části Repository"
+        className="grid grid-cols-2 gap-1 rounded-md border border-slate-200 bg-white p-1 sm:flex sm:flex-wrap"
+        role="tablist"
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              aria-controls="repository-panel"
+              aria-selected={activeTab === tab.id}
+              className={
+                activeTab === tab.id
+                  ? "inline-flex min-h-11 items-center justify-center gap-2 rounded bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-800"
+                  : "inline-flex min-h-11 items-center justify-center gap-2 rounded px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              }
+              id={`repository-tab-${tab.id}`}
+              key={tab.id}
+              role="tab"
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              type="button"
+              onClick={() => onTabChange(tab.id)}
+              onKeyDown={(event) => {
+                const currentIndex = tabs.findIndex((item) => item.id === tab.id);
+                const nextIndex = event.key === "ArrowRight"
+                  ? (currentIndex + 1) % tabs.length
+                  : event.key === "ArrowLeft"
+                    ? (currentIndex - 1 + tabs.length) % tabs.length
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? tabs.length - 1
+                        : null;
+                if (nextIndex === null) return;
+                event.preventDefault();
+                const nextTab = tabs[nextIndex];
+                onTabChange(nextTab.id);
+                document.getElementById(`repository-tab-${nextTab.id}`)?.focus();
+              }}
+            >
+              <Icon size={16} aria-hidden="true" /> {tab.label}
+              <span className="rounded-full bg-white px-1.5 py-0.5 text-xs text-slate-500">{tab.count}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain" data-repository-scroll>
-        {view === "folders" && <RepositoryFoldersView {...commonProps} />}
-        {view === "tree" && <RepositoryNestedView {...commonProps} />}
-        {view === "groups" && <RepositoryGroupsView {...commonProps} groups={groups} tags={tags} onGroupsChanged={onGroupsChanged} />}
-        {view === "mind-map" && (
-          <Suspense fallback={<div className="grid h-[680px] place-items-center text-sm text-slate-500"><RefreshCw className="animate-spin" size={18} /> Načítám myšlenkovou mapu...</div>}>
-            <RepositoryMindMapView {...commonProps} />
-          </Suspense>
+      <div
+        aria-labelledby={`repository-tab-${activeTab}`}
+        id="repository-panel"
+        role="tabpanel"
+      >
+        {activeTab === "groups" && (
+          <RepositoryGroupsView
+            groups={groups}
+            suites={suites}
+            testCases={testCases}
+            selectedGroupId={selectedGroupId}
+            onSelectedGroupChange={onSelectedGroupChange}
+            onChanged={onChanged}
+          />
         )}
+        {activeTab === "suites" && (
+          <RepositorySuitesView
+            suites={suites}
+            groups={groups}
+            selectedSuiteId={selectedSuiteId}
+            onCreate={onCreateSuite}
+            onEdit={onEditSuite}
+            onDelete={onDeleteSuite}
+          />
+        )}
+        {activeTab === "cases" && (
+          <RepositoryCasesView
+            testCases={testCases}
+            suites={suites}
+            tags={tags}
+            onCreate={onCreateCase}
+            onOpen={onOpenCase}
+            onDelete={onDeleteCase}
+            onMove={onMoveCase}
+            movingCaseId={movingCaseId}
+          />
+        )}
+        {activeTab === "tags" && <TestCaseTagSettings />}
       </div>
-
-      {preview && (
-        <div className="absolute inset-y-0 right-0 z-30 w-full overflow-auto border-l border-slate-200 bg-white shadow-2xl sm:max-w-xl">
-          {preview}
-        </div>
-      )}
     </section>
   );
 }

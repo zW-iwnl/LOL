@@ -20,7 +20,7 @@ async function login(page: Page) {
   await page.getByLabel(/heslo|password/i).fill(password);
   await page.getByRole("button", { name: /přihlásit|login/i }).click();
   await expect(page).toHaveURL(/dashboard/);
-  await expect(page.getByText("Test Manager")).toBeVisible();
+  await expect(page.getByRole("link", { name: /repository/i })).toBeVisible();
 }
 
 
@@ -30,6 +30,7 @@ test("main QA workflow is navigable", async ({ page }) => {
 
   await page.getByRole("link", { name: /repository/i }).click();
   await expect(page.getByRole("heading", { name: "Repository", exact: true }).first()).toBeVisible();
+  await page.getByRole("tab", { name: /Test cases/ }).click();
   await expect(page.getByRole("button", { name: /nový test case/i })).toBeVisible();
 
   await page.getByRole("link", { name: /test runs/i }).click();
@@ -64,7 +65,7 @@ test("test run wizard validates required workflow steps", async ({ page }) => {
 });
 
 
-test("repository search finds a test case and suite", async ({ page }) => {
+test("repository search opens the matching case and reveals the matching suite", async ({ page }) => {
   const assertClean = await assertNoConsoleErrors(page);
   await login(page);
   const headerSearch = page.getByPlaceholder("Hledat test case nebo suite");
@@ -77,8 +78,7 @@ test("repository search finds a test case and suite", async ({ page }) => {
   const testCaseResult = page.getByRole("button", { name: /ESHOP-TC-001.*Přihlášení platného uživatele/i });
   await expect(testCaseResult).toBeVisible();
   await testCaseResult.click();
-  await expect(page).toHaveURL(/\/test-cases\?.*suite=\d+/);
-  await expect(page).not.toHaveURL(/\/test-cases\/\d+/);
+  await expect(page).toHaveURL(/\/test-cases\/\d+/);
   await expect(page.getByRole("heading", { name: "Přihlášení platného uživatele", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: /repository/i }).click();
@@ -86,36 +86,43 @@ test("repository search finds a test case and suite", async ({ page }) => {
   const suiteResult = page.getByRole("button", { name: /^Checkout\b/i });
   await expect(suiteResult).toBeVisible();
   await suiteResult.click();
-  await expect(page).toHaveURL(/\/test-cases\?.*suite=\d+/);
+  await expect(page).toHaveURL(/tab=suites/);
+  await expect(page).toHaveURL(/suite=\d+/);
+  await expect(page.getByLabel("Hledat test suitu")).toHaveValue(/\d+/);
 
   assertClean();
 });
 
-test("repository workspace combines folders, tree and mind map", async ({ page }) => {
+test("repository group workspace, dialog and mobile navigation are operable", async ({ page }) => {
   const assertClean = await assertNoConsoleErrors(page);
   await login(page);
-
   await page.getByRole("link", { name: /repository/i }).click();
-  await page.getByRole("button", { name: "Složky", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Test cases", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Test suity", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Řadit test cases podle")).toBeVisible();
-  await expect(page.getByRole("group", { name: "Hustota řádků" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Myšlenková mapa", exact: true }).click();
-  await expect(page).toHaveURL(/view=mind-map/);
-  await expect(page.getByLabel("Myšlenková mapa Repository")).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Skupiny/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("navigation", { name: "Hierarchie skupin" })).toBeVisible();
+  await page.getByRole("tab", { name: /Test suity/ }).click();
+  await expect(page.getByRole("heading", { name: "Ploché test suity" })).toBeVisible();
+  await page.getByRole("button", { name: "Nová test suite" }).click();
+  await expect(page.getByRole("dialog", { name: "Nová test suite" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Strom", exact: true }).click();
-  await expect(page).toHaveURL(/view=tree/);
-  await expect(page.getByRole("tree", { name: "Strom test suit" })).toBeVisible();
-  await expect(page.getByTestId("repository-outline")).toBeVisible();
-  await expect(page.getByTestId("repository-tree-content")).toBeVisible();
+  await page.getByRole("tab", { name: /Test cases/ }).click();
+  await page.getByRole("button", { name: "Nový test case" }).click();
+  const caseEditor = page.locator("#test-case-create-editor");
+  await expect(caseEditor).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Nový test case" })).toHaveCount(0);
+  await expect(caseEditor.getByLabel(/Akce kroku 1/)).toBeVisible();
+  await caseEditor.getByRole("button", { name: "Přidat krok" }).click();
+  await expect(caseEditor.getByLabel(/Akce kroku 2/)).toBeVisible();
+  await caseEditor.getByRole("button", { name: "Zrušit" }).click();
+  await expect(caseEditor).toHaveCount(0);
 
-  await page.goto("/test-suites");
-  await page.getByRole("button", { name: "Složky", exact: true }).click();
-  await expect(page).toHaveURL(/view=folders/);
-  await expect(page.getByRole("navigation", { name: "Cesta test suity" })).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("button", { name: "Otevřít hlavní navigaci" })).toBeVisible();
+  await page.getByRole("button", { name: "Otevřít hlavní navigaci" }).click();
+  await expect(page.getByRole("dialog", { name: "Navigace" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Odhlásit se" })).toBeVisible();
 
   assertClean();
 });

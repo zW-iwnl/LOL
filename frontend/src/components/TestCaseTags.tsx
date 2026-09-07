@@ -1,5 +1,5 @@
-import { Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { TestCaseTag } from "../api/client";
 
@@ -22,12 +22,26 @@ export function MultiTagSelect({
   emptyLabel = "Vyhledejte a vyberte tagy",
 }: MultiSelectProps) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const comboboxRef = useRef<HTMLDivElement>(null);
+  const optionsId = useId();
   const normalizedQuery = query.trim().toLocaleLowerCase("cs");
   const selectedTags = tags.filter((tag) => values.includes(tag.id));
   const visibleTags = useMemo(
     () => tags.filter((tag) => !normalizedQuery || tag.name.toLocaleLowerCase("cs").includes(normalizedQuery)),
     [normalizedQuery, tags],
   );
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (event.target instanceof Node && !comboboxRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [open]);
 
   function toggle(tagId: number) {
     onChange(
@@ -54,25 +68,63 @@ export function MultiTagSelect({
           ))}
         </div>
       )}
-      <label className="relative block">
-        <span className="sr-only">Hledat v {label.toLocaleLowerCase("cs")}</span>
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-        <input
-          className="w-full rounded-md border border-slate-200 py-2 pl-8 pr-3 text-sm"
-          placeholder={emptyLabel}
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-      <div className="mt-2 max-h-36 space-y-1 overflow-auto">
-        {visibleTags.map((tag) => (
-          <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50" key={tag.id}>
-            <input checked={values.includes(tag.id)} type="checkbox" onChange={() => toggle(tag.id)} />
-            <span>{tag.name}</span>
-          </label>
-        ))}
-        {visibleTags.length === 0 && <p className="px-2 py-2 text-xs text-slate-500">Žádný odpovídající tag.</p>}
+      <div
+        ref={comboboxRef}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || !open) return;
+          event.preventDefault();
+          setOpen(false);
+          comboboxRef.current?.querySelector<HTMLButtonElement>("button[aria-haspopup]")?.focus();
+        }}
+      >
+        <button
+          aria-controls={optionsId}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          className="flex w-full items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm text-slate-500 hover:border-cyan-300"
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <Search size={14} />
+          <span className="min-w-0 flex-1 truncate">{emptyLabel}</span>
+          <ChevronDown className={`transition-transform ${open ? "rotate-180" : ""}`} size={14} />
+        </button>
+        {open && (
+          <div className="mt-2 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+            <label className="relative block">
+              <span className="sr-only">Hledat v {label.toLocaleLowerCase("cs")}</span>
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input
+                autoFocus
+                className="w-full rounded-md border border-slate-200 py-2 pl-8 pr-3 text-sm"
+                placeholder="Hledat tag"
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <div aria-label={`Dostupné ${label.toLocaleLowerCase("cs")}`} className="mt-2 max-h-36 space-y-1 overflow-auto" id={optionsId} role="group">
+              {visibleTags.map((tag) => {
+                const selected = values.includes(tag.id);
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-50"
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggle(tag.id)}
+                  >
+                    <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selected ? "border-cyan-700 bg-cyan-700 text-white" : "border-slate-300"}`}>
+                      {selected && <Check size={12} />}
+                    </span>
+                    <span>{tag.name}</span>
+                  </button>
+                );
+              })}
+              {visibleTags.length === 0 && <p className="px-2 py-2 text-xs text-slate-500">Žádný odpovídající tag.</p>}
+            </div>
+          </div>
+        )}
       </div>
       {required && values.length === 0 && <p className="mt-2 text-xs text-amber-700">Vyberte alespoň jeden tag.</p>}
     </fieldset>

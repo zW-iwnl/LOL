@@ -13,6 +13,7 @@ export type TestCaseTag = {
   id: number;
   category: TestCaseTagCategory;
   name: string;
+  usage_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -42,27 +43,20 @@ export type Dashboard = {
 
 export type TestSuite = {
   id: number;
-  parent_suite_id: number | null;
   name: string;
   description: string | null;
-  path: string;
-  level: number;
   sort_order: number;
   is_active: boolean;
   created_by: number;
   created_at: string;
   updated_at: string;
-  direct_test_case_count: number;
-  total_test_case_count: number;
+  test_case_count: number;
   group_ids: number[];
 };
 
 export type TestSuitePayload = {
-  parent_suite_id?: number | null;
   name: string;
   description?: string | null;
-  path?: string | null;
-  level?: number;
   sort_order?: number;
   is_active?: boolean;
   group_ids?: number[];
@@ -84,9 +78,17 @@ export type SuiteGroupTestCaseMember = {
   updated_at: string;
 };
 
+export type SuiteGroupTag = {
+  id: number;
+  category: TestCaseTagCategory;
+  name: string;
+  test_case_count: number;
+};
+
 export type SuiteGroup = {
   id: number;
-  parent_group_id: number | null;
+  parent_ids: number[];
+  child_ids: number[];
   name: string;
   description: string | null;
   sort_order: number;
@@ -94,10 +96,10 @@ export type SuiteGroup = {
   updated_at: string;
   members: SuiteGroupMember[];
   test_case_members: SuiteGroupTestCaseMember[];
+  tags: SuiteGroupTag[];
 };
 
 export type SuiteGroupPayload = {
-  parent_group_id?: number | null;
   name: string;
   description?: string | null;
   sort_order?: number;
@@ -118,7 +120,7 @@ export type TestStep = {
 
 export type TestCase = {
   id: number;
-  suite_id: number | null;
+  suite_id: number;
   code: string;
   title: string;
   description: string | null;
@@ -256,8 +258,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       clearStoredToken();
       window.dispatchEvent(new Event("test-manager-auth-expired"));
     }
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? `API chyba ${response.status}`);
+    const body = await response.json().catch(() => null);
+    throw new Error(apiErrorMessage(body, response.status));
   }
 
   if (response.status === 204) {
@@ -265,6 +267,26 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   }
 
   return response.json();
+}
+
+function apiErrorMessage(body: unknown, status: number): string {
+  if (!body || typeof body !== "object" || !("detail" in body)) {
+    return `API chyba ${status}`;
+  }
+
+  const detail = body.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (!item || typeof item !== "object" || !("msg" in item)) return null;
+        return typeof item.msg === "string" ? item.msg : null;
+      })
+      .filter((message): message is string => message !== null);
+    if (messages.length > 0) return messages.join(" ");
+  }
+
+  return `API chyba ${status}`;
 }
 
 export async function healthCheck(): Promise<{ status: string }> {
@@ -294,9 +316,6 @@ export function getTestSuites() {
   return request<TestSuite[]>("/test-suites");
 }
 
-export function getTestSuiteChildren(suiteId: number) {
-  return request<TestSuite[]>(`/test-suites/${suiteId}/children`);
-}
 
 export function getTestSuiteTestCases(suiteId: number) {
   return request<TestCase[]>(`/test-suites/${suiteId}/test-cases`);
@@ -346,6 +365,26 @@ export function updateSuiteGroup(groupId: number, payload: Partial<SuiteGroupPay
 
 export function deleteSuiteGroup(groupId: number) {
   return request<void>(`/suite-groups/${groupId}`, { method: "DELETE" });
+}
+
+export function addSuiteGroupChild(parentGroupId: number, childGroupId: number, sortOrder = 0) {
+  return request<SuiteGroup>(`/suite-groups/${parentGroupId}/children`, {
+    method: "POST",
+    body: JSON.stringify({ child_group_id: childGroupId, sort_order: sortOrder }),
+  });
+}
+
+export function removeSuiteGroupChild(parentGroupId: number, childGroupId: number) {
+  return request<void>(`/suite-groups/${parentGroupId}/children/${childGroupId}`, {
+    method: "DELETE",
+  });
+}
+
+export function setSuiteGroupParents(groupId: number, parentGroupIds: number[]) {
+  return request<SuiteGroup>(`/suite-groups/${groupId}/parents`, {
+    method: "PUT",
+    body: JSON.stringify({ parent_group_ids: parentGroupIds }),
+  });
 }
 
 export function addSuiteGroupMember(groupId: number, suiteId: number, sortOrder = 0) {

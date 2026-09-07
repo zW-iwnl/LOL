@@ -154,6 +154,20 @@ def test_case_rerun_preserves_history_and_can_be_selected(client: TestClient) ->
     assert reset_case["case_attempts"][0]["comment"] == "Chyba před resetem"
     assert reset_case["case_attempts"][0]["step_results"][0]["result"] == "passed"
 
+    stale_result_response = client.put(
+        f"/api/test-run-case-attempts/{first_case_attempt_id}/result",
+        headers=headers,
+        json={"result": "skipped"},
+    )
+    assert stale_result_response.status_code == 409
+
+    stale_step_response = client.put(
+        f"/api/test-run-case-attempts/{first_case_attempt_id}/steps/{step_id}/result",
+        headers=headers,
+        json={"result": "failed"},
+    )
+    assert stale_step_response.status_code == 409
+
     second_result_response = client.put(
         f"/api/test-run-case-attempts/{second_case_attempt_id}/result",
         headers=headers,

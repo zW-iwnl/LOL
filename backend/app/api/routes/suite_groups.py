@@ -2,14 +2,15 @@ from fastapi import APIRouter, Response, status
 
 from app.api.deps import DbSession
 from app.schemas.suite_group import (
+    SuiteGroupChildCreate,
     SuiteGroupCreate,
     SuiteGroupIdsUpdate,
     SuiteGroupMemberCreate,
     SuiteGroupMemberRead,
     SuiteGroupMemberUpdate,
-    SuiteGroupTestCaseIdsUpdate,
+    SuiteGroupParentIdsUpdate,
     SuiteGroupRead,
-    SuiteGroupTreeNode,
+    SuiteGroupTestCaseIdsUpdate,
     SuiteGroupUpdate,
 )
 from app.schemas.test_suite import TestSuiteRead
@@ -28,11 +29,6 @@ def create_group(payload: SuiteGroupCreate, db: DbSession):
     return group_service.create_group(db, payload)
 
 
-@router.get("/tree", response_model=list[SuiteGroupTreeNode])
-def group_tree(db: DbSession):
-    return group_service.get_group_tree(db)
-
-
 @router.get("/{group_id}", response_model=SuiteGroupRead)
 def get_group(group_id: int, db: DbSession):
     return group_service.get_group(db, group_id)
@@ -47,6 +43,42 @@ def update_group(group_id: int, payload: SuiteGroupUpdate, db: DbSession):
 def delete_group(group_id: int, db: DbSession) -> Response:
     group_service.delete_group(db, group_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{parent_group_id}/children", response_model=SuiteGroupRead)
+def add_child(
+    parent_group_id: int,
+    payload: SuiteGroupChildCreate,
+    db: DbSession,
+):
+    return group_service.add_child(
+        db,
+        parent_group_id,
+        payload.child_group_id,
+        payload.sort_order,
+    )
+
+
+@router.delete(
+    "/{parent_group_id}/children/{child_group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_child(
+    parent_group_id: int,
+    child_group_id: int,
+    db: DbSession,
+) -> Response:
+    group_service.remove_child(db, parent_group_id, child_group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{group_id}/parents", response_model=SuiteGroupRead)
+def set_group_parents(
+    group_id: int,
+    payload: SuiteGroupParentIdsUpdate,
+    db: DbSession,
+):
+    return group_service.set_group_parents(db, group_id, payload.parent_group_ids)
 
 
 @router.post(

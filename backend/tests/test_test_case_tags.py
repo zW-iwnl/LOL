@@ -27,6 +27,7 @@ def test_manage_tags_and_filter_test_cases(client: TestClient) -> None:
         "/api/test-cases",
         headers=auth,
         json={
+            "suite_id": 1,
             "code": "TC-TAGS-1",
             "title": "Tagged case",
             "business_area_id": business_area["id"],
@@ -79,6 +80,7 @@ def test_rejects_tag_from_wrong_category_and_deletes_unused_tag(client: TestClie
         "/api/test-cases",
         headers=auth,
         json={
+            "suite_id": 1,
             "code": "TC-WRONG-TAG",
             "title": "Wrong tag",
             "business_area_id": wrong_tag["id"],
@@ -102,6 +104,7 @@ def test_multiple_tags_per_category_are_persisted_filtered_and_snapshotted(clien
         "/api/test-cases",
         headers=auth,
         json={
+            "suite_id": 1,
             "code": "TC-MULTI-TAGS",
             "title": "Karta i úvěr",
             "tag_ids": [cards["id"], loans["id"], domain["id"], object_type["id"]],

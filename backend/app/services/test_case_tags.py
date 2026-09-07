@@ -7,11 +7,35 @@ from app.schemas.test_case_tag import TestCaseTagCategory, TestCaseTagCreate, Te
 from app.services.common import not_found
 
 
+def _attach_usage_counts(
+    db: Session,
+    tags: list[TestCaseTag],
+) -> list[TestCaseTag]:
+    tag_ids = [tag.id for tag in tags]
+    counts = (
+        dict(
+            db.query(
+                TestCaseTagAssignment.tag_id,
+                func.count(TestCaseTagAssignment.test_case_id),
+            )
+            .filter(TestCaseTagAssignment.tag_id.in_(tag_ids))
+            .group_by(TestCaseTagAssignment.tag_id)
+            .all()
+        )
+        if tag_ids
+        else {}
+    )
+    for tag in tags:
+        tag.usage_count = int(counts.get(tag.id, 0))
+    return tags
+
+
 def list_tags(db: Session, category: TestCaseTagCategory | None = None) -> list[TestCaseTag]:
     query = db.query(TestCaseTag)
     if category is not None:
         query = query.filter(TestCaseTag.category == category)
-    return query.order_by(TestCaseTag.category, TestCaseTag.name).all()
+    tags = query.order_by(TestCaseTag.category, TestCaseTag.name).all()
+    return _attach_usage_counts(db, tags)
 
 
 def get_tag(db: Session, tag_id: int) -> TestCaseTag:

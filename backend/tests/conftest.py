@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db
 from app.core.security import hash_password
 from app.main import app
-from app.models import User
+from app.models import TestSuite, User
 
 
 @compiles(BigInteger, "sqlite")
@@ -49,6 +49,17 @@ def database() -> Generator[None, None, None]:
             is_active=True,
         )
         db.add(user)
+        db.flush()
+        db.add(
+            TestSuite(
+                id=1,
+                name="Výchozí test suite",
+                description="Výchozí suita pro testovací scénáře.",
+                sort_order=0,
+                is_active=True,
+                created_by=user.id,
+            )
+        )
         db.commit()
     finally:
         db.close()

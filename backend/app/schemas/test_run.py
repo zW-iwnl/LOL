@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import TestRunCaseResult, TestRunStatus, TestRunStepResultValue, TimestampFields
 from app.schemas.test_case import TestCaseRead
@@ -16,6 +16,16 @@ class TestRunBase(BaseModel):
     planned_end: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_planned_dates(self):
+        if (
+            self.planned_start is not None
+            and self.planned_end is not None
+            and self.planned_end < self.planned_start
+        ):
+            raise ValueError("Plánovaný konec nesmí být před plánovaným začátkem.")
+        return self
 
 
 class TestRunCreate(TestRunBase):
@@ -91,8 +101,18 @@ class TestRunRead(TestRunBase, TimestampFields):
     test_run_cases: list[TestRunCaseRead] = []
 
 
-class TestRunListItem(TestRunRead):
-    pass
+class TestRunCaseListItem(BaseModel):
+    id: int
+    test_run_id: int
+    test_case_id: int
+    assigned_to: int | None
+    result: TestRunCaseResult
+
+
+class TestRunListItem(TestRunBase, TimestampFields):
+    id: int
+    created_by: int
+    test_run_cases: list[TestRunCaseListItem] = []
 
 
 class TestRunAddCasesRequest(BaseModel):

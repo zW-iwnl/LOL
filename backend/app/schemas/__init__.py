@@ -19,4 +19,4 @@ from app.schemas.test_run import (
     TestRunUpdate,
     UpdateResultRequest,
 )
-from app.schemas.test_suite import TestSuiteCreate, TestSuiteRead, TestSuiteTreeNode, TestSuiteUpdate
+from app.schemas.test_suite import TestSuiteCreate, TestSuiteRead, TestSuiteUpdate

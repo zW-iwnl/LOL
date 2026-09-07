@@ -123,9 +123,10 @@ Skript:
 1. ověří `.env.production` a Compose konfiguraci;
 2. sestaví aktuální frontend a backend obrazy;
 3. spustí PostgreSQL;
-4. backend provede Alembic migrace;
-5. spustí frontend a Caddy;
-6. počká na health checky a ověří `/health` přes frontend.
+4. jednorázová služba `migrate` provede Alembic migrace;
+5. backend se spustí pouze po úspěšném dokončení migrace;
+6. spustí frontend a Caddy;
+7. počká na health checky a ověří `/health` přes frontend.
 
 Stav a logy:
 
@@ -167,9 +168,10 @@ Očekávaná odpověď:
 V prohlížeči ověř:
 
 1. přihlášení produkčním administrátorem;
-2. vytvoření projektu;
-3. vytvoření suite, test case a kroků;
-4. vytvoření test runu a uložení výsledku;
+2. vytvoření skupiny a ploché test suite;
+3. vytvoření test case a kroků v test suite;
+4. zařazení suite nebo test case do skupiny;
+5. vytvoření test runu a uložení výsledku;
 6. odhlášení a opětovné přihlášení.
 
 ## 9. Zálohy

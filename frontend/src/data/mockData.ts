@@ -158,7 +158,7 @@ export const testRuns: TestRun[] = [
 
 
 export function suiteName(suiteId: number) {
-  return suites.find((suite) => suite.id === suiteId)?.name ?? "Počátek vesmíru";
+  return suites.find((suite) => suite.id === suiteId)?.name ?? "Neznámá test suite";
 }
 
 export function resultLabel(result: Result) {

@@ -39,7 +39,7 @@ class TestStepRead(TestStepBase, TimestampFields):
 
 
 class TestCaseBase(BaseModel):
-    suite_id: int | None = None
+    suite_id: int = Field(gt=0)
     code: str = Field(min_length=1, max_length=50)
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
@@ -56,9 +56,22 @@ class TestCaseBase(BaseModel):
 class TestCaseCreate(TestCaseBase):
     steps: list[TestStepCreate] = []
 
+    @model_validator(mode="after")
+    def validate_unique_step_order(self):
+        orders = [step.step_order for step in self.steps]
+        if len(orders) != len(set(orders)):
+            raise ValueError("Pořadí kroků musí být v rámci test case unikátní.")
+        return self
+
 
 class TestCaseUpdate(BaseModel):
-    suite_id: int | None = None
+    suite_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def require_suite_when_provided(self):
+        if "suite_id" in self.model_fields_set and self.suite_id is None:
+            raise ValueError("Test case musí patřit do test suity.")
+        return self
     code: str | None = Field(default=None, min_length=1, max_length=50)
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None

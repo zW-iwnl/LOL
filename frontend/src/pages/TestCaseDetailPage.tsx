@@ -108,10 +108,11 @@ export function TestCaseDetailPage() {
     [testCaseState.data?.steps],
   );
 
-  const suiteName = suitesState.data?.find((suite) => suite.id === testCaseState.data?.suite_id)?.name ?? "Počátek vesmíru";
+  const suiteName = suitesState.data?.find((suite) => suite.id === testCaseState.data?.suite_id)?.name ?? "Neznámá test suite";
 
   function validateTestCaseForm(form: EditForm): string | null {
     if (!form.title.trim()) return "Title je povinný.";
+    if (!form.suiteId) return "Test suite je povinná.";
     if (!statuses.includes(form.status)) return "Status musí být draft, ready nebo deprecated.";
     return null;
   }
@@ -133,7 +134,7 @@ export function TestCaseDetailPage() {
 
     try {
       await updateTestCase(testCaseState.data.id, {
-        suite_id: editForm.suiteId ? Number(editForm.suiteId) : null,
+        suite_id: Number(editForm.suiteId),
         code: editForm.code.trim(),
         title: editForm.title.trim(),
         description: editForm.description.trim() || null,
@@ -330,8 +331,7 @@ export function TestCaseDetailPage() {
               <label className="block text-sm">
                 <span className="font-medium">Suite</span>
                 <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={editForm.suiteId} onChange={(event) => setEditForm({ ...editForm, suiteId: event.target.value })}>
-                  <option value="">Počátek vesmíru</option>
-                  {(suitesState.data ?? []).map((suite) => <option key={suite.id} value={suite.id}>{" ".repeat(suite.level * 2)}{suite.name}</option>)}
+                  {(suitesState.data ?? []).map((suite) => <option key={suite.id} value={suite.id}>#{suite.id} {suite.name}</option>)}
                 </select>
               </label>
               <label className="block text-sm">

@@ -28,31 +28,25 @@ def get_or_create_admin(db: Session) -> User:
     return user
 
 
-
 def get_or_create_suite(
     db: Session,
     *,
     admin: User,
     name: str,
-    path: str,
-    level: int,
     sort_order: int,
-    parent_suite: TestSuite | None = None,
 ) -> TestSuite:
     suite = (
         db.query(TestSuite)
-        .filter(TestSuite.path == path)
-        .one_or_none()
+        .filter(TestSuite.name == name)
+        .order_by(TestSuite.id)
+        .first()
     )
     if suite:
         return suite
 
     suite = TestSuite(
-        parent_suite_id=parent_suite.id if parent_suite else None,
         name=name,
         description=f"Demo test suite {name}.",
-        path=path,
-        level=level,
         sort_order=sort_order,
         is_active=True,
         created_by=admin.id,
@@ -145,30 +139,16 @@ def seed_demo_data() -> None:
     db = SessionLocal()
     try:
         admin = get_or_create_admin(db)
-
-        backend_api = get_or_create_suite(
-            db,
-            admin=admin,
-            name="Backend API",
-            path="/Backend API",
-            level=0,
-            sort_order=10,
-        )
         authentication_api = get_or_create_suite(
             db,
             admin=admin,
             name="Authentication API",
-            path="/Backend API/Authentication API",
-            level=1,
             sort_order=10,
-            parent_suite=backend_api,
         )
         checkout = get_or_create_suite(
             db,
             admin=admin,
             name="Checkout",
-            path="/Checkout",
-            level=0,
             sort_order=20,
         )
 

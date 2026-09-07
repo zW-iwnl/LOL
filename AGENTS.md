@@ -53,11 +53,15 @@ První verze musí obsahovat:
 ## Databázová pravidla
 - Každá hlavní tabulka má id, created_at, updated_at.
 - Aplikace používá jedno globální repository bez projektového dělení.
-- TestSuite má parent_suite_id pro stromovou strukturu.
-- TestSuite má path pro rychlé hledání podstromu.
-- TestCase volitelně patří do TestSuite.
-- TestRun obsahuje sadu TestRunCase položek.
-- TestRunCase drží výsledek konkrétního provedení test case.
+- TestSuite je plochá entita bez parent_suite_id, path a level.
+- SuiteGroup tvoří jedinou hierarchickou vrstvu repository a může mít více rodičů (DAG).
+- Vazby SuiteGroupRelation nesmí vytvářet cykly.
+- TestSuite může být členem více SuiteGroup.
+- TestCase povinně patří právě do jedné TestSuite a může být zároveň explicitním členem více SuiteGroup.
+- TestRun obsahuje sadu TestRunCase položek; dvojice test_run_id a test_case_id je unikátní.
+- TestRunCase drží aktuální výsledek a neměnný snapshot konkrétního test case.
+- Historické TestRunCase a jejich attempts se při odstranění zdrojového TestCase nemažou.
+- TestCase použitý v test runu se místo fyzického smazání označí jako deprecated.
 
 ## Status hodnoty
 TestCase status:

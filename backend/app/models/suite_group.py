@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -8,35 +8,29 @@ from app.models.mixins import TimestampMixin
 class SuiteGroup(TimestampMixin, Base):
     __tablename__ = "suite_groups"
     __table_args__ = (
-        UniqueConstraint("parent_group_id", "name", name="uq_suite_groups_parent_name"),
-        Index("idx_suite_groups_parent_group_id", "parent_group_id"),
-        Index(
-            "uq_suite_groups_root_name",
-            "name",
-            unique=True,
-            postgresql_where=text("parent_group_id IS NULL"),
-            sqlite_where=text("parent_group_id IS NULL"),
-        ),
+        CheckConstraint("sort_order >= 0", name="ck_suite_groups_sort_order_nonnegative"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    parent_group_id: Mapped[int | None] = mapped_column(
-        ForeignKey("suite_groups.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    parent_group = relationship(
-        "SuiteGroup",
-        remote_side=[id],
-        back_populates="child_groups",
-    )
-    child_groups = relationship(
-        "SuiteGroup",
+    outgoing_relations = relationship(
+        "SuiteGroupRelation",
+        foreign_keys="SuiteGroupRelation.parent_group_id",
         back_populates="parent_group",
-        order_by="SuiteGroup.sort_order, SuiteGroup.name",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="SuiteGroupRelation.sort_order, SuiteGroupRelation.child_group_id",
+    )
+    incoming_relations = relationship(
+        "SuiteGroupRelation",
+        foreign_keys="SuiteGroupRelation.child_group_id",
+        back_populates="child_group",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="SuiteGroupRelation.parent_group_id",
     )
     memberships = relationship(
         "SuiteGroupMember",
@@ -62,10 +56,59 @@ class SuiteGroup(TimestampMixin, Base):
     def test_case_members(self) -> list["SuiteGroupTestCaseMember"]:
         return self.test_case_memberships
 
+    @property
+    def parent_ids(self) -> list[int]:
+        return [relation.parent_group_id for relation in self.incoming_relations]
+
+    @property
+    def child_ids(self) -> list[int]:
+        return [relation.child_group_id for relation in self.outgoing_relations]
+
+
+class SuiteGroupRelation(TimestampMixin, Base):
+    __tablename__ = "suite_group_relations"
+    __table_args__ = (
+        CheckConstraint("parent_group_id <> child_group_id", name="ck_suite_group_relations_not_self"),
+        CheckConstraint("sort_order >= 0", name="ck_suite_group_relations_sort_order_nonnegative"),
+        Index(
+            "idx_suite_group_relations_parent_sort_child",
+            "parent_group_id",
+            "sort_order",
+            "child_group_id",
+        ),
+        Index(
+            "idx_suite_group_relations_child_parent",
+            "child_group_id",
+            "parent_group_id",
+        ),
+    )
+
+    parent_group_id: Mapped[int] = mapped_column(
+        ForeignKey("suite_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    child_group_id: Mapped[int] = mapped_column(
+        ForeignKey("suite_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    parent_group = relationship(
+        "SuiteGroup",
+        foreign_keys=[parent_group_id],
+        back_populates="outgoing_relations",
+    )
+    child_group = relationship(
+        "SuiteGroup",
+        foreign_keys=[child_group_id],
+        back_populates="incoming_relations",
+    )
+
 
 class SuiteGroupMember(TimestampMixin, Base):
     __tablename__ = "suite_group_members"
     __table_args__ = (
+        CheckConstraint("sort_order >= 0", name="ck_suite_group_members_sort_order_nonnegative"),
         Index("idx_suite_group_members_suite_id", "suite_id"),
     )
 
@@ -86,6 +129,7 @@ class SuiteGroupMember(TimestampMixin, Base):
 class SuiteGroupTestCaseMember(TimestampMixin, Base):
     __tablename__ = "suite_group_test_case_members"
     __table_args__ = (
+        CheckConstraint("sort_order >= 0", name="ck_suite_group_test_case_members_sort_order_nonnegative"),
         Index(
             "idx_suite_group_test_case_members_test_case_id",
             "test_case_id",

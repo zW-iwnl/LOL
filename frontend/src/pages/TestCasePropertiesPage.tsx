@@ -1,14 +1,5 @@
-import { PageHeader } from "../components/PageHeader";
-import { TestCaseTagSettings } from "../components/TestCaseTagSettings";
+import { Navigate } from "react-router-dom";
 
 export function TestCasePropertiesPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Nastavení comboboxů"
-        description="Správa hodnot Business oblast, Aplikace/doména a Objekt."
-      />
-      <TestCaseTagSettings />
-    </div>
-  );
+  return <Navigate to="/test-cases?tab=tags" replace />;
 }

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -16,8 +16,26 @@ class TestRunCaseAttempt(TimestampMixin, Base):
             "attempt_number",
             name="uq_test_run_case_attempts_attempt_case_number",
         ),
+        UniqueConstraint(
+            "id",
+            "test_run_case_id",
+            name="uq_test_run_case_attempts_id_run_case",
+        ),
+        CheckConstraint("attempt_number >= 1", name="ck_test_run_case_attempts_number_positive"),
+        CheckConstraint(
+            "result IN ('not_run', 'passed', 'failed', 'blocked', 'skipped')",
+            name="ck_test_run_case_attempts_result",
+        ),
         Index("idx_test_run_case_attempts_attempt_id", "test_run_attempt_id"),
         Index("idx_test_run_case_attempts_run_case_id", "test_run_case_id"),
+        Index(
+            "idx_test_run_case_attempts_run_case_executed",
+            "test_run_case_id",
+            "executed_at",
+            "updated_at",
+            postgresql_where=text("result <> 'not_run'"),
+            sqlite_where=text("result <> 'not_run'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -43,4 +61,5 @@ class TestRunCaseAttempt(TimestampMixin, Base):
         back_populates="test_run_case_attempt",
         cascade="all, delete-orphan",
         order_by="TestRunStepResult.step_order",
+        overlaps="all_step_results,test_run_case",
     )

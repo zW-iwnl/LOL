@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -11,7 +11,13 @@ class TestRunAttempt(TimestampMixin, Base):
     __tablename__ = "test_run_attempts"
     __table_args__ = (
         UniqueConstraint("test_run_id", "attempt_number", name="uq_test_run_attempts_run_number"),
+        CheckConstraint("attempt_number >= 1", name="ck_test_run_attempts_number_positive"),
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'completed', 'archived')",
+            name="ck_test_run_attempts_status",
+        ),
         Index("idx_test_run_attempts_test_run_id", "test_run_id"),
+        Index("idx_test_run_attempts_last_run_case_id", "last_test_run_case_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

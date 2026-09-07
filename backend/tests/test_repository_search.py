@@ -7,18 +7,11 @@ def headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login(client)}"}
 
 
-def create_suite(
-    client: TestClient,
-    auth: dict[str, str],
-    name: str,
-    *,
-    parent_suite_id: int | None = None,
-    description: str | None = None,
-) -> dict:
+def create_suite(client: TestClient, auth: dict[str, str], name: str) -> dict:
     response = client.post(
         "/api/test-suites",
         headers=auth,
-        json={"name": name, "parent_suite_id": parent_suite_id, "description": description},
+        json={"name": name},
     )
     assert response.status_code == 201
     return response.json()
@@ -27,14 +20,11 @@ def create_suite(
 def create_case(
     client: TestClient,
     auth: dict[str, str],
+    suite_id: int,
     code: str,
     title: str,
     *,
-    suite_id: int | None = None,
-    description: str | None = None,
-    business_area_id: int | None = None,
-    application_domain_id: int | None = None,
-    object_type_id: int | None = None,
+    tag_ids: list[int] | None = None,
 ) -> dict:
     response = client.post(
         "/api/test-cases",
@@ -43,21 +33,18 @@ def create_case(
             "code": code,
             "title": title,
             "suite_id": suite_id,
-            "description": description,
-            "business_area_id": business_area_id,
-            "application_domain_id": application_domain_id,
-            "object_type_id": object_type_id,
+            "tag_ids": tag_ids or [],
         },
     )
     assert response.status_code == 201
     return response.json()
 
 
-def create_tag(client: TestClient, auth: dict[str, str], category: str, name: str) -> dict:
+def create_group(client: TestClient, auth: dict[str, str], name: str) -> dict:
     response = client.post(
-        "/api/test-case-tags",
+        "/api/suite-groups",
         headers=auth,
-        json={"category": category, "name": name},
+        json={"name": name},
     )
     assert response.status_code == 201
     return response.json()
@@ -67,109 +54,171 @@ def search(client: TestClient, auth: dict[str, str], **params: object):
     return client.get("/api/repository/search", headers=auth, params=params)
 
 
-def test_search_orders_by_relevance_and_returns_lightweight_results(client: TestClient) -> None:
+def test_search_returns_flat_suite_identity(client: TestClient) -> None:
     auth = headers(client)
-    suite = create_suite(client, auth, "Login", description="Autentizace zákazníka")
-    exact = create_case(client, auth, "TC-LOGIN", "Základní přihlášení", suite_id=suite["id"])
-    prefix = create_case(client, auth, "TC-LOGIN-02", "Alternativní přihlášení", suite_id=suite["id"])
-    create_case(client, auth, "TC-OTHER", "Login administrátora", suite_id=suite["id"])
-
-    response = search(client, auth, q="tc-login", limit=10)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["query"] == "tc-login"
-    assert [item["id"] for item in body["items"][:2]] == [exact["id"], prefix["id"]]
-    assert body["items"][0]["type"] == "test_case"
-    assert body["items"][0]["suite_path"] == "/Login"
-    assert "steps" not in body["items"][0]
-
-    case_insensitive = search(client, auth, q="PŘIHLÁŠENÍ", types="test_case")
-    assert case_insensitive.status_code == 200
-    assert {item["id"] for item in case_insensitive.json()["items"]} == {exact["id"], prefix["id"]}
-
-
-def test_searches_suite_name_path_and_filters_result_type(client: TestClient) -> None:
-    auth = headers(client)
-    parent = create_suite(client, auth, "Platby")
-    child = create_suite(client, auth, "Karty", parent_suite_id=parent["id"])
-    create_case(client, auth, "TC-CARD", "Platba kartou", suite_id=child["id"])
-
-    suites = search(client, auth, q="Platby/Karty", types="test_suite")
-    assert suites.status_code == 200
-    assert suites.json()["items"] == [
-        {
-            "type": "test_suite",
-            "id": child["id"],
-            "label": "Karty",
-            "path": "/Platby/Karty",
-            "test_case_count": 1,
-            "is_active": True,
-        }
-    ]
-
-    cases_only = search(client, auth, q="Platby", types="test_case")
-    assert cases_only.status_code == 200
-    assert all(item["type"] == "test_case" for item in cases_only.json()["items"])
-
-
-def test_searches_tag_names_and_combines_exact_tag_filters(client: TestClient) -> None:
-    auth = headers(client)
-    business_area = create_tag(client, auth, "business_area", "Platební karty")
-    other_area = create_tag(client, auth, "business_area", "Úvěry")
-    domain = create_tag(client, auth, "application_domain", "Internetbanking")
-    object_type = create_tag(client, auth, "object_type", "Formulář")
-    matching = create_case(
+    suite = create_suite(client, auth, "Login")
+    exact = create_case(
         client,
         auth,
-        "TC-TAGS-1",
-        "Odeslání",
-        business_area_id=business_area["id"],
-        application_domain_id=domain["id"],
-        object_type_id=object_type["id"],
+        suite["id"],
+        "TC-LOGIN",
+        "Základní přihlášení",
     )
     create_case(
         client,
         auth,
-        "TC-TAGS-2",
-        "Jiný test",
-        business_area_id=other_area["id"],
-        application_domain_id=domain["id"],
-        object_type_id=object_type["id"],
+        suite["id"],
+        "TC-LOGIN-02",
+        "Alternativní přihlášení",
     )
 
-    by_name = search(client, auth, q="platební")
-    assert by_name.status_code == 200
-    assert [item["id"] for item in by_name.json()["items"]] == [matching["id"]]
-    assert by_name.json()["items"][0]["business_area"]["name"] == "Platební karty"
+    response = search(client, auth, q="tc-login", limit=10)
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["id"] == exact["id"]
+    assert item["suite_id"] == suite["id"]
+    assert item["suite_name"] == "Login"
+    assert "suite_path" not in item
 
-    filtered = search(
+
+def test_suite_search_returns_groups_counts_and_inherited_tags(
+    client: TestClient,
+) -> None:
+    auth = headers(client)
+    tag = client.post(
+        "/api/test-case-tags",
+        headers=auth,
+        json={"category": "business_area", "name": "Platby"},
+    ).json()
+    group = create_group(client, auth, "Release")
+    suite = create_suite(client, auth, "Karty")
+    create_case(
         client,
         auth,
-        business_area_id=business_area["id"],
-        application_domain_id=domain["id"],
-        object_type_id=object_type["id"],
+        suite["id"],
+        "TC-CARD",
+        "Platba kartou",
+        tag_ids=[tag["id"]],
     )
-    assert filtered.status_code == 200
-    assert [item["id"] for item in filtered.json()["items"]] == [matching["id"]]
-    assert all(item["type"] == "test_case" for item in filtered.json()["items"])
+    assert client.post(
+        f"/api/suite-groups/{group['id']}/members",
+        headers=auth,
+        json={"suite_id": suite["id"]},
+    ).status_code == 201
 
-    wrong_category = search(client, auth, business_area_id=object_type["id"])
-    assert wrong_category.status_code == 400
-
-
-def test_search_is_global_validated_and_authenticated(client: TestClient) -> None:
-    auth = headers(client)
-    first = create_case(client, auth, "TC-SHARED-ONE", "Sdílený výraz")
-    second = create_case(client, auth, "TC-SHARED-TWO", "Sdílený výraz")
-
-    response = search(client, auth, q="sdílený")
+    response = search(client, auth, q="platby", types="test_suite")
     assert response.status_code == 200
-    assert {item["id"] for item in response.json()["items"]} == {first["id"], second["id"]}
-    assert search(client, auth, q="x").status_code == 422
-    assert search(client, auth, q="valid", limit=51).status_code == 422
-    assert search(client, auth, q="valid", types="unknown").status_code == 422
+    assert response.json()["items"] == [
+        {
+            "type": "test_suite",
+            "id": suite["id"],
+            "label": "Karty",
+            "group_ids": [group["id"]],
+            "test_case_count": 1,
+            "is_active": True,
+            "tags": [
+                {
+                    "id": tag["id"],
+                    "category": "business_area",
+                    "name": "Platby",
+                    "test_case_count": 1,
+                }
+            ],
+        }
+    ]
 
-    unauthenticated = client.get("/api/repository/search", params={"q": "valid"})
-    assert unauthenticated.status_code == 401
-    assert search(client, auth, q="x" * 201).status_code == 422
+
+def test_group_search_traverses_dag_and_deduplicates_diamond(
+    client: TestClient,
+) -> None:
+    auth = headers(client)
+    tag = client.post(
+        "/api/test-case-tags",
+        headers=auth,
+        json={"category": "business_area", "name": "Kritické platby"},
+    ).json()
+    root = create_group(client, auth, "Release")
+    left = create_group(client, auth, "Web")
+    right = create_group(client, auth, "Mobil")
+    leaf = create_group(client, auth, "Smoke")
+    for parent, child in (
+        (root, left),
+        (root, right),
+        (left, leaf),
+        (right, leaf),
+    ):
+        assert client.post(
+            f"/api/suite-groups/{parent['id']}/children",
+            headers=auth,
+            json={"child_group_id": child["id"]},
+        ).status_code == 200
+
+    suite = create_suite(client, auth, "Checkout")
+    case = create_case(
+        client,
+        auth,
+        suite["id"],
+        "TC-GRAPH",
+        "Platba",
+        tag_ids=[tag["id"]],
+    )
+    assert client.put(
+        f"/api/suite-groups/{leaf['id']}/test-case-members",
+        headers=auth,
+        json={"test_case_ids": [case["id"]]},
+    ).status_code == 200
+
+    response = search(
+        client,
+        auth,
+        q="kritické platby",
+        types="suite_group",
+    )
+    assert response.status_code == 200
+    by_id = {item["id"]: item for item in response.json()["items"]}
+    assert set(by_id) == {root["id"], left["id"], right["id"], leaf["id"]}
+    assert by_id[root["id"]]["test_case_count"] == 1
+    assert by_id[leaf["id"]]["parent_ids"] == [left["id"], right["id"]]
+
+
+def test_exact_tag_filters_apply_to_all_repository_types(
+    client: TestClient,
+) -> None:
+    auth = headers(client)
+    area = client.post(
+        "/api/test-case-tags",
+        headers=auth,
+        json={"category": "business_area", "name": "Karty"},
+    ).json()
+    domain = client.post(
+        "/api/test-case-tags",
+        headers=auth,
+        json={"category": "application_domain", "name": "IB"},
+    ).json()
+    suite = create_suite(client, auth, "Karetní workflow")
+    case = create_case(
+        client,
+        auth,
+        suite["id"],
+        "TC-TAGS",
+        "Odeslání",
+        tag_ids=[area["id"], domain["id"]],
+    )
+
+    response = search(
+        client,
+        auth,
+        types="test_case",
+        business_area_id=area["id"],
+        application_domain_id=domain["id"],
+    )
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == [case["id"]]
+
+
+def test_search_validation_and_authentication(client: TestClient) -> None:
+    auth = headers(client)
+    assert search(client, auth, q="x").status_code == 422
+    assert search(client, auth, q="valid", types="invalid").status_code == 422
+    assert search(client, auth).status_code == 422
+    assert client.get("/api/repository/search", params={"q": "valid"}).status_code == 401
