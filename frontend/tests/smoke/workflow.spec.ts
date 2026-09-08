@@ -46,29 +46,28 @@ test("main QA workflow is navigable", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /test runs/i })).toBeVisible();
   await page.getByRole("button", { name: /nový test run/i }).click();
   await expect(page.getByRole("heading", { name: /nový test run/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /1\. nastavení/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /2\. test cases/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /3\. přiřazení/i })).toBeVisible();
-  await page.getByRole("button", { name: /zavřít/i }).click();
+  await expect(page.getByLabel("Název úkolu", { exact: false })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Skupiny", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Test suity", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Zrušit", exact: true }).click();
 
   assertClean();
 });
 
-test("test run wizard validates required workflow steps", async ({ page }) => {
+test("inline test run form validates required fields and selection", async ({ page }) => {
   const assertClean = await assertNoConsoleErrors(page);
   await login(page);
   await page.getByRole("link", { name: /test runs/i }).click();
 
   await page.getByRole("button", { name: /nový test run/i }).click();
-  await page.getByRole("button", { name: /pokračovat/i }).click();
-  await expect(page.getByText(/název test runu je povinný/i)).toBeVisible();
+  await page.getByRole("button", { name: "Vytvořit test run", exact: true }).click();
+  await expect(page.getByText("Název úkolu je povinný.")).toBeVisible();
 
-  await page.getByLabel(/název test runu/i).fill(`Smoke run ${Date.now()}`);
-  await page.getByRole("button", { name: /pokračovat/i }).click();
-  await expect(page.getByRole("button", { name: /2\. test cases/i })).toHaveClass(/text-cyan-700/);
+  await page.getByLabel(/název úkolu/i).fill(`Smoke run ${Date.now()}`);
+  await expect(page.getByText(/Unikátní schválené testy: 0/)).toBeVisible();
 
-  await page.getByRole("button", { name: /pokračovat/i }).click();
-  await expect(page.getByText(/vyber alespoň jeden test case/i)).toBeVisible();
+  await page.getByRole("button", { name: "Vytvořit test run", exact: true }).click();
+  await expect(page.getByText("Vyberte alespoň jeden schválený test case.")).toBeVisible();
 
   assertClean();
 });

@@ -23,6 +23,7 @@ class TestRun(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    task_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     environment: Mapped[str | None] = mapped_column(String(100), nullable=True)

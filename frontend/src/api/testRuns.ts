@@ -63,6 +63,7 @@ export type TestRunCase = {
 type TestRunBase = {
   id: number;
   name: string;
+  task_number: string | null;
   description: string | null;
   version: string | null;
   environment: string | null;
@@ -91,6 +92,7 @@ export type TestRunListItem = TestRunBase & {
 
 export type TestRunCreatePayload = {
   name: string;
+  task_number?: string | null;
   description?: string | null;
   version?: string | null;
   environment?: string | null;
@@ -100,7 +102,47 @@ export type TestRunCreatePayload = {
   started_at?: string | null;
   finished_at?: string | null;
   test_case_ids?: number[];
+  assigned_to?: number | null;
+  selection?: RunSelection;
+  selection_fingerprint?: string;
 };
+
+export type RunSelection = {
+  groups: { group_id: number; include_descendants: boolean }[];
+  suite_ids: number[];
+  test_case_ids: number[];
+};
+
+export type SelectionCase = {
+  id: number;
+  code: string;
+  title: string;
+  suite_id: number;
+  version_id: number | null;
+  tags: string[];
+  exclusion_reason: string | null;
+};
+
+export type SelectionSuite = { id: number; name: string; case_ids: number[] };
+export type SelectionGroup = SelectionSuite & {
+  own_case_ids: number[];
+  suite_ids: number[];
+  children: { group_id: number; include_descendants: boolean }[];
+};
+export type SelectionCatalog = {
+  cases: SelectionCase[];
+  suites: SelectionSuite[];
+  groups: SelectionGroup[];
+};
+export type SelectionPreview = { cases: SelectionCase[]; excluded_cases: SelectionCase[]; fingerprint: string };
+
+export function getRunSelectionCatalog() {
+  return request<SelectionCatalog>("/test-runs/selection-catalog");
+}
+
+export function previewRunSelection(selection: RunSelection) {
+  return request<SelectionPreview>("/test-runs/selection-preview", { method: "POST", body: JSON.stringify(selection) });
+}
 
 export type TestRunUpdatePayload = Partial<TestRunCreatePayload>;
 

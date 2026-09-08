@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -40,7 +40,7 @@ def list_test_runs(
 ) -> list[TestRun]:
     query = db.query(TestRun).options(selectinload(TestRun.test_run_cases))
     if q:
-        query = query.filter(TestRun.name.ilike(f"%{q.strip()}%"))
+        query = query.filter(or_(TestRun.name.ilike(f"%{q.strip()}%"), TestRun.task_number.ilike(f"%{q.strip()}%")))
     if status_filter:
         query = query.filter(TestRun.status == status_filter)
     if environment:
@@ -180,7 +180,19 @@ def list_attempts(db: Session, test_run_id: int) -> list[TestRunAttempt]:
 
 
 def create_test_run(db: Session, payload: TestRunCreate, current_user: User) -> TestRun:
-    data = payload.model_dump(exclude={"test_case_ids"})
+    from app.services.test_run_selection import preview_selection
+
+    case_ids = payload.test_case_ids
+    if payload.selection is not None:
+        if payload.test_case_ids:
+            raise HTTPException(422, "Jednotlivé testy vložte do výběru společně se suitami a skupinami.")
+        preview = preview_selection(db, payload.selection, lock=True)
+        if payload.selection_fingerprint != preview.fingerprint:
+            raise HTTPException(409, "Výběr nebo schválené verze se změnily. Obnovte náhled a zkontrolujte výběr.")
+        case_ids = [item.id for item in preview.cases]
+        if not case_ids:
+            raise HTTPException(422, "Vyberte alespoň jeden schválený test case.")
+    data = payload.model_dump(exclude={"test_case_ids", "assigned_to", "selection", "selection_fingerprint"})
     test_run = TestRun(**data, created_by=current_user.id)
     db.add(test_run)
     db.flush()
@@ -195,8 +207,8 @@ def create_test_run(db: Session, payload: TestRunCreate, current_user: User) -> 
         )
     )
     db.flush()
-    if payload.test_case_ids:
-        add_test_cases(db, test_run.id, TestRunAddCasesRequest(test_case_ids=payload.test_case_ids), current_user=current_user)
+    if case_ids:
+        add_test_cases(db, test_run.id, TestRunAddCasesRequest(test_case_ids=case_ids, assigned_to=payload.assigned_to), current_user=current_user, commit=False)
     db.commit()
     return get_test_run(db, test_run.id)
 
@@ -283,7 +295,7 @@ def _latest_attempt(db: Session, test_run_id: int) -> TestRunAttempt:
     return attempt
 
 
-def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesRequest, current_user: User | None = None) -> TestRun:
+def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesRequest, current_user: User | None = None, *, commit: bool = True) -> TestRun:
     test_run = (
         db.query(TestRun)
         .filter(TestRun.id == test_run_id)
@@ -385,7 +397,10 @@ def add_test_cases(db: Session, test_run_id: int, payload: TestRunAddCasesReques
                 for step in steps_for(case_attempt)
             )
         db.add_all(step_results)
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(

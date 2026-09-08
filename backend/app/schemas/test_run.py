@@ -1,13 +1,26 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.common import TestRunCaseResult, TestRunStatus, TestRunStepResultValue, TimestampFields
 from app.schemas.test_case import TestCaseRead
+from app.schemas.test_run_selection import RunSelection
 
 
-class TestRunBase(BaseModel):
+class RunTextValidation(BaseModel):
+    @field_validator("name", "task_number", check_fields=False, mode="before")
+    @classmethod
+    def trim_text(cls, value, info):
+        if isinstance(value, str):
+            value = value.strip()
+            if info.field_name == "task_number" and not value:
+                return None
+        return value
+
+
+class TestRunBase(RunTextValidation):
     name: str = Field(min_length=1, max_length=255)
+    task_number: str | None = Field(default=None, max_length=100)
     description: str | None = None
     version: str | None = Field(default=None, max_length=100)
     environment: str | None = Field(default=None, max_length=100)
@@ -30,10 +43,14 @@ class TestRunBase(BaseModel):
 
 class TestRunCreate(TestRunBase):
     test_case_ids: list[int] = []
+    assigned_to: int | None = Field(default=None, gt=0)
+    selection: RunSelection | None = None
+    selection_fingerprint: str | None = Field(default=None, min_length=64, max_length=64)
 
 
-class TestRunUpdate(BaseModel):
+class TestRunUpdate(RunTextValidation):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    task_number: str | None = Field(default=None, max_length=100)
     description: str | None = None
     version: str | None = Field(default=None, max_length=100)
     environment: str | None = Field(default=None, max_length=100)

@@ -20,8 +20,20 @@ from app.schemas.test_run import (
 )
 from app.services import test_run_steps as step_result_service
 from app.services import test_runs as test_run_service
+from app.schemas.test_run_selection import RunSelection, SelectionCatalog, SelectionPreview
+from app.services.test_run_selection import selection_catalog, preview_selection
 
 router = APIRouter(tags=["Test Runs", "Execution"])
+
+
+@router.get("/test-runs/selection-catalog", response_model=SelectionCatalog)
+def get_selection_catalog(db: DbSession, current_user: CurrentUser):
+    return selection_catalog(db)
+
+
+@router.post("/test-runs/selection-preview", response_model=SelectionPreview)
+def get_selection_preview(payload: RunSelection, db: DbSession, current_user: CurrentUser):
+    return preview_selection(db, payload)
 
 
 @router.get("/test-runs", response_model=list[TestRunListItem])

@@ -5,7 +5,6 @@ import { getTestCases } from "../api/testCases";
 import {
   addCasesToTestRun,
   archiveTestRun,
-  createTestRun,
   getTestRuns,
   removeTestRunCase,
   updateTestRunCase,
@@ -18,6 +17,7 @@ import {
 } from "../api/testRuns";
 import { getUsers, type TestCase } from "../api/client";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
+import { TestRunCreatePanel } from "../components/test-runs/TestRunCreatePanel";
 import { PageHeader } from "../components/PageHeader";
 import { resultLabel } from "../data/mockData";
 
@@ -35,11 +35,11 @@ const statusClasses: Record<TestRunStatus, string> = {
   archived: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
-type ModalMode = "create" | "edit" | "detail";
-type CreateStep = "details" | "cases" | "assignment";
+type ModalMode = "edit" | "detail";
 
 type TestRunFormState = {
   name: string;
+  task_number: string;
   description: string;
   version: string;
   environment: string;
@@ -50,6 +50,7 @@ type TestRunFormState = {
 
 const emptyForm: TestRunFormState = {
   name: "",
+  task_number: "",
   description: "",
   version: "",
   environment: "TEST",
@@ -105,6 +106,7 @@ function resultSummary(cases: Array<{ result: TestRunCaseListItem["result"] }>) 
 function toForm(run: TestRun | TestRunListItem): TestRunFormState {
   return {
     name: run.name,
+    task_number: run.task_number ?? "",
     description: run.description ?? "",
     version: run.version ?? "",
     environment: run.environment ?? "TEST",
@@ -117,6 +119,7 @@ function toForm(run: TestRun | TestRunListItem): TestRunFormState {
 function buildPayload(form: TestRunFormState): TestRunCreatePayload {
   return {
     name: form.name.trim(),
+    task_number: form.task_number.trim() || null,
     description: form.description.trim() || null,
     version: form.version.trim() || null,
     environment: form.environment.trim() || null,
@@ -195,7 +198,8 @@ export function TestRunsPage() {
   const [environmentFilter, setEnvironmentFilter] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalMode, setModalMode] = useState<ModalMode | null>(null);
-  const [createStep, setCreateStep] = useState<CreateStep>("details");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createdRun, setCreatedRun] = useState<TestRun | null>(null);
   const [selectedRun, setSelectedRun] = useState<TestRun | TestRunListItem | null>(null);
   const [form, setForm] = useState<TestRunFormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -249,22 +253,15 @@ export function TestRunsPage() {
   const allFilteredSelected = filteredAvailableIds.length > 0 && filteredAvailableIds.every((id) => selectedCaseIds.includes(id));
 
   useEffect(() => {
-    if (shouldOpenCreate && !modalMode) {
+    if (shouldOpenCreate) {
       openCreate();
       navigate("/test-runs", { replace: true });
     }
-  }, [modalMode, navigate, shouldOpenCreate]);
+  }, [navigate, shouldOpenCreate]);
 
   function openCreate() {
-    setSelectedRun(null);
-    setForm(emptyForm);
-    setFormError(null);
-    setCreateStep("details");
-    setSelectedCaseIds([]);
-    setAssignedTo("");
-    setCaseQuery("");
-    setCaseStatusFilter("");
-    setModalMode("create");
+    setModalMode(null);
+    setCreateOpen(true);
   }
 
   function openEdit(run: TestRunListItem) {
@@ -289,7 +286,6 @@ export function TestRunsPage() {
     setModalMode(null);
     setSelectedRun(null);
     setFormError(null);
-    setCreateStep("details");
     setSelectedCaseIds([]);
     setAssignedTo("");
     setCaseQuery("");
@@ -306,37 +302,6 @@ export function TestRunsPage() {
     return null;
   }
 
-  function goToNextCreateStep() {
-    setFormError(null);
-    if (createStep === "details") {
-      const validationError = validateForm();
-      if (validationError) {
-        setFormError(validationError);
-        return;
-      }
-      setCreateStep("cases");
-      return;
-    }
-    if (createStep === "cases") {
-      if (selectedCaseIds.length === 0) {
-        setFormError("Vyber alespoň jeden test case pro test run.");
-        return;
-      }
-      setCreateStep("assignment");
-    }
-  }
-
-  function goToPreviousCreateStep() {
-    setFormError(null);
-    if (createStep === "assignment") {
-      setCreateStep("cases");
-      return;
-    }
-    if (createStep === "cases") {
-      setCreateStep("details");
-    }
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const validationError = validateForm();
@@ -344,24 +309,13 @@ export function TestRunsPage() {
       setFormError(validationError);
       return;
     }
-    if (modalMode === "create" && selectedCaseIds.length === 0) {
-      setCreateStep("cases");
-      setFormError("Vyber alespoň jeden test case pro test run.");
-      return;
-    }
-
     setSaving(true);
     setFormError(null);
     setPageError(null);
     try {
       const payload = buildPayload(form);
-      let savedRun = modalMode === "edit" && selectedRun ? await updateTestRun(selectedRun.id, payload) : await createTestRun(payload);
-      if (modalMode === "create" && selectedCaseIds.length > 0) {
-        savedRun = await addCasesToTestRun(savedRun.id, {
-          test_case_ids: selectedCaseIds,
-          assigned_to: assignedTo ? Number(assignedTo) : null,
-        });
-      }
+      if (!selectedRun) return;
+      const savedRun = await updateTestRun(selectedRun.id, payload);
       setSelectedRun(savedRun);
       setModalMode("detail");
       setSelectedCaseIds([]);
@@ -455,7 +409,7 @@ export function TestRunsPage() {
     }
   }
 
-  if (runsState.loading || allRunsState.loading || casesState.loading || usersState.loading) {
+  if ((!runsState.data && runsState.loading) || (!allRunsState.data && allRunsState.loading) || (!casesState.data && casesState.loading) || (!usersState.data && usersState.loading)) {
     return <LoadingState />;
   }
 
@@ -467,10 +421,22 @@ export function TestRunsPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <PageHeader title="Test Runs" description="Plánování, správa a sledování běhů testování." />
-        <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} type="button">
+        <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} aria-expanded={createOpen} aria-controls="test-run-create" type="button">
           <Plus size={16} /> Nový test run
         </button>
       </div>
+
+      {createOpen && <TestRunCreatePanel users={users} onCancel={() => setCreateOpen(false)} onCreated={(run) => {
+        setCreateOpen(false);
+        setCreatedRun(run);
+        setQuery("");
+        setStatusFilter("");
+        setEnvironmentFilter("");
+        setRefreshKey((value) => value + 1);
+      }} />}
+      {createdRun && <p role="status" className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
+        Test run „{createdRun.name}“ byl vytvořen. <Link className="underline" to={`/test-runs/${createdRun.id}/execution`}>Spustit execution</Link>
+      </p>}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-md border border-slate-200 bg-white p-5">
@@ -549,9 +515,10 @@ export function TestRunsPage() {
                 {runs.map((run) => {
                   const summary = resultSummary(run.test_run_cases);
                   return (
-                    <tr key={run.id} className="border-t border-slate-100">
+                    <tr key={run.id} className={`border-t border-slate-100 ${createdRun?.id === run.id ? "bg-cyan-50" : ""}`}>
                       <td className="px-5 py-4">
                         <div className="font-semibold">{run.name}</div>
+                        {run.task_number && <div className="mt-1 text-xs font-medium text-cyan-800">{run.task_number}</div>}
                         <div className="mt-1 text-xs text-slate-500">{run.description ?? "-"}</div>
                       </td>
                       <td className="px-5 py-4">{run.version ?? "-"}</td>
@@ -608,7 +575,7 @@ export function TestRunsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">
-                  {modalMode === "create" ? "Nový test run" : modalMode === "edit" ? "Upravit test run" : "Detail test runu"}
+                  {modalMode === "edit" ? "Upravit test run" : "Detail test runu"}
                 </h2>
               </div>
               <button className="rounded-md p-1 text-slate-500 hover:bg-slate-100" onClick={closeModal} type="button">
@@ -618,32 +585,14 @@ export function TestRunsPage() {
 
             {modalMode !== "detail" ? (
               <div className="mt-5 space-y-5">
-                {modalMode === "create" ? (
-                  <div className="grid gap-2 rounded-md bg-slate-50 p-2 text-sm md:grid-cols-3">
-                    {[
-                      ["details", "1. Nastavení"],
-                      ["cases", "2. Test cases"],
-                      ["assignment", "3. Přiřazení"],
-                    ].map(([step, label]) => (
-                      <button
-                        key={step}
-                        className={[
-                          "rounded-md px-3 py-2 text-left font-medium",
-                          createStep === step ? "bg-white text-cyan-700 shadow-sm" : "text-slate-600 hover:bg-white",
-                        ].join(" ")}
-                        type="button"
-                        onClick={() => setCreateStep(step as CreateStep)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className={`grid gap-4 md:grid-cols-2 ${modalMode === "create" && createStep !== "details" ? "hidden" : ""}`}>
+                <div className="grid gap-4 md:grid-cols-2">
                 <label className="block text-sm md:col-span-2">
-                  <span className="font-medium">Název test runu</span>
+                  <span className="font-medium">Název úkolu</span>
                   <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium">Číslo úkolu</span>
+                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" maxLength={100} value={form.task_number} onChange={(event) => setForm((current) => ({ ...current, task_number: event.target.value }))} />
                 </label>
                 <label className="block text-sm md:col-span-2">
                   <span className="font-medium">Popis</span>
@@ -681,60 +630,12 @@ export function TestRunsPage() {
                   <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="datetime-local" value={form.planned_end} onChange={(event) => setForm((current) => ({ ...current, planned_end: event.target.value }))} />
                 </label>
                 </div>
-                {modalMode === "create" && (
-                  <section className={`rounded-md border border-slate-200 p-4 ${createStep !== "cases" ? "hidden" : ""}`}>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="font-semibold">Test cases v runu</div>
-                        <div className="mt-1 text-sm text-slate-500">Vybráno {selectedCaseIds.length} z {availableTestCases.length} dostupných.</div>
-                      </div>
-                      <button className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={filteredAvailableIds.length === 0} onClick={toggleAllFilteredCases} type="button">
-                        {allFilteredSelected ? "Odznačit zobrazené" : "Vybrat zobrazené"}
-                      </button>
-                    </div>
-                    <CasePickerFilters
-                      query={caseQuery}
-                      status={caseStatusFilter}
-                      onQueryChange={setCaseQuery}
-                      onStatusChange={setCaseStatusFilter}
-                    />
-                    <CasePickerList
-                      testCases={filteredAvailableTestCases}
-                      selectedCaseIds={selectedCaseIds}
-                      onToggle={(testCaseId) =>
-                        setSelectedCaseIds((current) =>
-                          current.includes(testCaseId) ? current.filter((id) => id !== testCaseId) : [...current, testCaseId],
-                        )
-                      }
-                    />
-                  </section>
-                )}
-                {modalMode === "create" && (
-                  <section className={`rounded-md border border-slate-200 p-4 ${createStep !== "assignment" ? "hidden" : ""}`}>
-                    <div className="font-semibold">Přiřazení testerovi</div>
-                    <p className="mt-1 text-sm text-slate-500">Vybrané test cases: {selectedCaseIds.length}. Přiřazení můžeš později změnit v detailu runu.</p>
-                    <label className="mt-4 block text-sm">
-                      <span className="font-medium">Tester</span>
-                      <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
-                        <option value="">Nepřiřazeno</option>
-                        {users.map((user) => (
-                          <option key={user.id} value={user.id}>{user.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="mt-4 grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-2">
-                      <div><span className="text-slate-500">Název:</span> {form.name || "-"}</div>
-                      <div><span className="text-slate-500">Prostředí:</span> {form.environment || "-"}</div>
-                      <div><span className="text-slate-500">Verze:</span> {form.version || "-"}</div>
-                      <div><span className="text-slate-500">Počet test cases:</span> {selectedCaseIds.length}</div>
-                    </div>
-                  </section>
-                )}
               </div>
             ) : selectedRunLatest ? (
               <div className="mt-5 space-y-5">
                 <div className="grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-3">
                   <div><span className="text-slate-500">Název:</span> {selectedRunLatest.name}</div>
+                  <div><span className="text-slate-500">Číslo úkolu:</span> {selectedRunLatest.task_number ?? "-"}</div>
                   <div><span className="text-slate-500">Verze:</span> {selectedRunLatest.version ?? "-"}</div>
                   <div><span className="text-slate-500">Prostředí:</span> {selectedRunLatest.environment ?? "-"}</div>
                   <div><span className="text-slate-500">Stav:</span> {statusLabels[selectedRunLatest.status]}</div>
@@ -827,16 +728,12 @@ export function TestRunsPage() {
             {formError && <div className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{formError}</div>}
 
             <div className="mt-5 flex justify-end gap-2">
-              <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium" onClick={modalMode === "create" && createStep !== "details" ? goToPreviousCreateStep : closeModal} type="button">
-                {modalMode === "create" && createStep !== "details" ? "Zpět" : "Zavřít"}
+              <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium" onClick={closeModal} type="button">
+                Zavřít
               </button>
-              {modalMode === "create" && createStep !== "assignment" ? (
-                <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={goToNextCreateStep} type="button">
-                  Pokračovat
-                </button>
-              ) : modalMode !== "detail" ? (
+              {modalMode !== "detail" ? (
                 <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={saving} type="submit">
-                  {saving ? "Ukládám..." : modalMode === "create" ? "Vytvořit test run" : "Uložit"}
+                  {saving ? "Ukládám..." : "Uložit"}
                 </button>
               ) : null}
             </div>
