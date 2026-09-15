@@ -3,7 +3,7 @@ from app.schemas.test_case_workflow import VersionRerun
 from app.services.test_case_operations import mutate
 
 from app.api.deps import CurrentUser, DbSession
-from app.schemas.common import TestRunStatus
+from app.schemas.common import TestRunStatus, TestRunCaseResult
 from app.schemas.test_run import (
     TestRunAddCasesRequest,
     TestRunAttemptRead,
@@ -62,13 +62,16 @@ def create_test_run(payload: TestRunCreate, db: DbSession, current_user: Current
 
 @router.get("/test-runs/page")
 def run_page(db: DbSession, q: str | None = Query(None, max_length=200), status: TestRunStatus | None = None,
-             environment: str | None = Query(None, max_length=100), offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+             environment: str | None = Query(None, max_length=100), offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), summary_only: bool = False):
     from app.services.run_workspace import run_page
-    return run_page(db, q=q, status=status, environment=environment, offset=offset, limit=limit)
+    return run_page(db, q=q, status=status, environment=environment, offset=offset, limit=limit, summary_only=summary_only)
 
 
 @router.get("/test-runs/{test_run_id}", response_model=TestRunRead)
-def get_test_run(test_run_id: int, db: DbSession):
+def get_test_run(test_run_id: int, db: DbSession, summary_only: bool = False):
+    if summary_only:
+        from app.services.run_workspace import run_detail
+        return run_detail(db, test_run_id)
     return test_run_service.get_test_run(db, test_run_id)
 
 
@@ -180,3 +183,12 @@ def update_step_result(
         payload,
         current_user,
     )
+
+
+@router.get("/test-runs/{test_run_id}/cases/page")
+def run_cases_page(test_run_id: int, db: DbSession, q: str | None = Query(None, max_length=200),
+                   result: TestRunCaseResult | None = None,
+                   tester: str | None = Query(None, pattern=r"^(unassigned|[1-9][0-9]*)$"),
+                   offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
+    from app.services.run_workspace import run_cases_page
+    return run_cases_page(db, test_run_id, q=q, result=result, tester=tester, offset=offset, limit=limit)

@@ -44,6 +44,11 @@ export async function mockApi(page: Page, rejectFirstCreate = false) {
       return;
     }
     if (path === "/api/test-runs") json = runs;
+    const detail = path.match(/^\/api\/test-runs\/(\d+)$/);
+    if (detail) json = runs.find(run => run.id === Number(detail[1]));
+    const casesPage = path.match(/^\/api\/test-runs\/(\d+)\/cases\/page$/);
+    if (casesPage) { const run = runs.find(run => run.id === Number(casesPage[1])); const items = run?.test_run_cases ?? []; json = { items, total: (items as unknown[]).length }; }
+
     if (path === "/api/test-runs/page") json = { items: runs, total: runs.length, stats: { total: runs.length, active: runs.length, completed: 0, averagePassRate: 0 } };
     await route.fulfill({ json });
   });

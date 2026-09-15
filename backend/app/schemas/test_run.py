@@ -121,6 +121,7 @@ class TestRunCaseExecutionRead(TestRunCaseRead):
 
 
 class TestRunRead(TestRunBase, TimestampFields):
+    summary: dict | None = None
     id: int
     created_by: int
     test_run_cases: list[TestRunCaseRead] = []

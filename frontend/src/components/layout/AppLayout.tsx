@@ -33,7 +33,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const workspaceLayout = /^\/(test-runs\/\d+\/execution|execution\/\d+)\/?$/.test(pathname) || /^\/(test-cases(?:\/\d+)?|test-case-approvals(?:\/\d+)?)\/?$/.test(pathname);
+  const workspaceLayout = pathname === "/test-runs" || /^\/(test-runs\/\d+\/execution|execution\/\d+)\/?$/.test(pathname) || /^\/(test-cases(?:\/\d+)?|test-case-approvals(?:\/\d+)?)\/?$/.test(pathname);
   const [executionMenuExpanded, setExecutionMenuExpanded] = useState(false);
   const compact = workspaceLayout && !executionMenuExpanded;
   const [searchQuery, setSearchQuery] = useState("");

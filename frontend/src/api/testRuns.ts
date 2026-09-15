@@ -79,15 +79,19 @@ type TestRunBase = {
 };
 
 export type TestRun = TestRunBase & {
+  summary?: RunSummary;
   test_run_cases: TestRunCase[];
 };
+
+export type RunSummary = { counts: Record<TestRunCaseResult, number>; total: number; executed: number; progress: number; passRate: number | null };
 
 export type TestRunCaseListItem = Pick<
   TestRunCase,
   "id" | "test_run_id" | "test_case_id" | "assigned_to" | "result" | "code" | "title"
->;
+> & { has_history?: boolean };
 
 export type TestRunListItem = TestRunBase & {
+  summary?: RunSummary;
   test_run_cases: TestRunCaseListItem[];
 };
 
@@ -205,8 +209,16 @@ export function getTestRuns(params: GetTestRunsParams = {}) {
   return request<TestRunListItem[]>(`/test-runs${buildQuery(params)}`);
 }
 
-export function getTestRun(testRunId: number) {
-  return request<TestRun>(`/test-runs/${testRunId}`);
+export function getTestRun(testRunId: number, summaryOnly = false) {
+  return request<TestRun>(`/test-runs/${testRunId}${summaryOnly ? "?summary_only=true" : ""}`);
+}
+
+export function getTestRunCasesPage(id: number, filters: { q: string; result: string; tester: string; offset: number }) {
+  const params = new URLSearchParams({ offset: String(filters.offset), limit: "25" });
+  if (filters.q.trim()) params.set("q", filters.q.trim());
+  if (filters.result) params.set("result", filters.result);
+  if (filters.tester) params.set("tester", filters.tester);
+  return request<{ items: TestRunCaseListItem[]; total: number }>(`/test-runs/${id}/cases/page?${params}`);
 }
 
 export function createTestRun(payload: TestRunCreatePayload) {
@@ -281,5 +293,6 @@ export function updateTestRunStepResult(
 }
 
 export function getTestRunPage(params: GetTestRunsParams = {}) {
-  return request<{ items: TestRunListItem[]; total: number; offset: number; limit: number; stats: { total: number; active: number; completed: number; averagePassRate: number } }>(`/test-runs/page${buildQuery(params)}`);
+  const query = buildQuery(params);
+  return request<{ items: TestRunListItem[]; total: number; offset: number; limit: number; stats: { total: number; active: number; completed: number; averagePassRate: number } }>(`/test-runs/page${query}${query ? "&" : "?"}summary_only=true`);
 }

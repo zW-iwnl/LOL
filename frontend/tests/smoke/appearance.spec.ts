@@ -216,16 +216,18 @@ for (const mode of ["light", "dark"] as const) {
     await mockCreateRun(page);
     const run = { id: 99, name: "Regrese plateb", task_number: "QA-123", description: "Kontrola plateb a storna", environment: "TEST", version: "2.4", status: "in_progress", planned_start: null, planned_end: null,
       test_run_cases: ["passed", "failed", "blocked", "skipped", "not_run"].map((result, i) => ({ id: i + 1, test_case_id: i + 1, test_run_id: 99, code: `TC-${i + 1}`, title: "Ověření platby", result, assigned_to: 1 })) };
+    await page.route("**/api/test-runs/99?*", route => route.fulfill({ json: run }));
+    await page.route("**/api/test-runs/99/cases/page*", route => route.fulfill({ json: { items: run.test_run_cases, total: run.test_run_cases.length } }));
     await page.route("**/api/test-runs/page*", route => route.fulfill({ json: { items: [run], total: 1, stats: { total: 1, active: 1, completed: 0, averagePassRate: 25 } } }));
     await page.route("**/api/repository/cases*", route => route.fulfill({ json: { items: [], total: 0 } }));
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/test-runs");
     await expect(page.getByText("Regrese plateb", { exact: true })).toBeVisible();
     await screenshot(page, `runs-${mode}`);
-    await page.getByRole("button", { name: "Detail", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Detail test runu" })).toBeVisible();
+    await page.getByRole("button", { name: /Regrese plateb.*Vyhodnoceno/ }).click();
+    await expect(page.getByRole("heading", { name: "Regrese plateb" })).toBeVisible();
     await screenshot(page, `run-detail-${mode}`);
-    await page.getByRole("button", { name: "Zavřít", exact: true }).click();
+    await page.getByText("Akce běhu", { exact: true }).click();
     await page.getByRole("button", { name: "Upravit", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Upravit test run" })).toBeVisible();
     await screenshot(page, `run-edit-${mode}`);

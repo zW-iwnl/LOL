@@ -30,7 +30,7 @@ test("creates from inline form using tag search and overlapping group and suite"
   await panel.getByRole("button", { name: "Vytvořit test run", exact: true }).click();
   await expect(panel).toHaveCount(0);
   await expect(page.getByText("Test run „Regrese plateb“ byl vytvořen.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("row", { name: /Regrese plateb/ })).toHaveClass(/bg-selected-bg/);
+  await expect(page.getByRole("button", { name: /Regrese plateb.*Vyhodnoceno/ })).toHaveAttribute("aria-current", "true");
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({ name: "Regrese plateb", task_number: "QA-123", assigned_to: 1,
     selection: { groups: [], suite_ids: [1], test_case_ids: [] }, selection_fingerprint: "a".repeat(64) });

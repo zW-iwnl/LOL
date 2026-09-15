@@ -6,7 +6,11 @@ import {
 import { RunRepositoryPicker } from "./RunRepositoryPicker";
 import { RunSelectionSummary } from "./RunSelectionSummary";
 
+import { validateRunForm } from "./model";
+import { RunField } from "./RunField";
+
 type Props = {
+  onDirtyChange?: (dirty: boolean) => void;
   users: { id: number; name: string; is_active: boolean }[];
   onCancel: () => void;
   onCreated: (run: TestRun) => void;
@@ -14,7 +18,7 @@ type Props = {
 const inputClass = "mt-1 w-full rounded-md border border-border px-3 py-2 text-sm";
 const emptySelection: RunSelection = { groups: [], suite_ids: [], test_case_ids: [] };
 
-export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
+export function TestRunCreatePanel({ users, onCancel, onCreated, onDirtyChange }: Props) {
   const [form, setForm] = useState({ name: "", task_number: "", planned_end: "", description: "",
     version: "", environment: "TEST", planned_start: "", assigned_to: "", status: "open" as "open" | "in_progress" });
   const [selection, setSelection] = useState<RunSelection>(emptySelection);
@@ -33,6 +37,9 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
   const previewKey = `${reload}:${selectionKey}`;
   const currentPreview = preview?.key === previewKey ? preview.data : null;
 
+  const dirty = Boolean(form.name || form.task_number || form.description || form.planned_end || form.planned_start || form.version || form.assigned_to
+    || form.environment !== "TEST" || form.status !== "open" || selectionKey !== JSON.stringify(emptySelection));
+  useEffect(() => { onDirtyChange?.(dirty || saving); }, [dirty, saving, onDirtyChange]);
   useEffect(() => { panel.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }, []);
   useEffect(() => {
     let active = true;
@@ -65,14 +72,8 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
-    if (!form.name.trim()) { setError("Název úkolu je povinný."); return; }
-    if (form.name.trim().length > 255 || form.task_number.trim().length > 100) { setError("Název může mít nejvýše 255 znaků a číslo úkolu 100 znaků."); return; }
-    if ((form.planned_start && !Number.isFinite(Date.parse(form.planned_start))) || (form.planned_end && !Number.isFinite(Date.parse(form.planned_end)))) {
-      setError("Zadejte platné datum a čas."); return;
-    }
-    if (form.planned_start && form.planned_end && new Date(form.planned_start) > new Date(form.planned_end)) {
-      setError("Termín nesmí být před plánovaným začátkem."); return;
-    }
+    const validation = validateRunForm(form);
+    if (validation) { setError(validation); return; }
     if (!currentPreview || catalogLoading || catalogError) { setError("Nejprve načtěte aktuální náhled výběru."); return; }
     if (!currentPreview.cases.length) { setError("Vyberte alespoň jeden schválený test case."); return; }
     submitting.current = true;
@@ -97,14 +98,14 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
       setSaving(false);
     }
   }
-  return <section ref={panel} id="test-run-create" aria-labelledby="test-run-create-title" className="scroll-mt-4 rounded-lg border border-focus bg-surface p-5 shadow-sm shadow-shadow">
+  return <section ref={panel} id="test-run-create" aria-labelledby="test-run-create-title" className="bg-surface p-4">
     <h2 id="test-run-create-title" className="text-lg font-semibold">Nový test run</h2>
     <form className="mt-4 space-y-5" noValidate onSubmit={(event) => void submit(event)}>
       <fieldset disabled={saving} className="space-y-5 disabled:opacity-70">
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-medium">Název úkolu *<input autoFocus required maxLength={255} className={inputClass} value={form.name} onChange={(event) => changeField("name", event.target.value)} /></label>
-          <label className="text-sm font-medium">Číslo úkolu<input maxLength={100} placeholder="Např. QA-123" className={inputClass} value={form.task_number} onChange={(event) => changeField("task_number", event.target.value)} /></label>
-          <label className="text-sm font-medium">Termín<input type="datetime-local" className={inputClass} value={form.planned_end} onChange={(event) => changeField("planned_end", event.target.value)} /></label>
+          <RunField label="Název úkolu *" autoFocus required maxLength={255} value={form.name} onChange={(event) => changeField("name", event.target.value)} />
+          <RunField label="Číslo úkolu" maxLength={100} placeholder="Např. QA-123" value={form.task_number} onChange={(event) => changeField("task_number", event.target.value)} />
+          <RunField label="Termín" type="datetime-local" value={form.planned_end} onChange={(event) => changeField("planned_end", event.target.value)} />
           <label className="text-sm font-medium md:col-span-2">Popis<textarea rows={3} className={inputClass} value={form.description} onChange={(event) => changeField("description", event.target.value)} /></label>
         </div>
         {catalogLoading && <p role="status" className="text-sm text-muted">Načítám nabídku skupin a suit…</p>}
@@ -121,9 +122,9 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
             <label className="text-sm">Tester<select aria-label="Tester" className={inputClass} value={form.assigned_to} onChange={(event) => changeField("assigned_to", event.target.value)}>
               <option value="">Nepřiřazeno</option>{users.filter((user) => user.is_active).map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
             </select></label>
-            <label className="text-sm">Prostředí<input className={inputClass} maxLength={100} value={form.environment} onChange={(event) => changeField("environment", event.target.value)} /></label>
-            <label className="text-sm">Verze<input className={inputClass} maxLength={100} value={form.version} onChange={(event) => changeField("version", event.target.value)} /></label>
-            <label className="text-sm">Plánovaný začátek<input className={inputClass} type="datetime-local" value={form.planned_start} onChange={(event) => changeField("planned_start", event.target.value)} /></label>
+            <RunField label="Prostředí" maxLength={100} value={form.environment} onChange={(event) => changeField("environment", event.target.value)} />
+            <RunField label="Verze" maxLength={100} value={form.version} onChange={(event) => changeField("version", event.target.value)} />
+            <RunField label="Plánovaný začátek" type="datetime-local" value={form.planned_start} onChange={(event) => changeField("planned_start", event.target.value)} />
             <label className="text-sm">Stav<select className={inputClass} value={form.status} onChange={(event) => changeField("status", event.target.value)}>
               <option value="open">Otevřený</option><option value="in_progress">Probíhá</option>
             </select></label>

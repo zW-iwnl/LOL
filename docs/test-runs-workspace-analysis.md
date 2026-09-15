@@ -2,6 +2,26 @@
 
 Datum: 2026-09-15. Výchozí revize: `00081fd`.
 
+## Stav implementace
+
+Implementováno 2026-09-15: kompaktní seznam/detail, panelové založení a editace,
+samostatný průběh a úspěšnost, vlastní prostředí, URL a obnova filtrů,
+ochrana rozepsaných údajů včetně navigace prohlížeče, mobilní rozložení a oba režimy vzhledu.
+Původní klíče preferencí i výběr testů z repository s fingerprintem jsou zachované.
+
+Seznam a detail používají volitelný `summary_only=true`; původní API kontrakt bez tohoto
+parametru zůstává dostupný. Nový `GET /test-runs/{id}/cases/page` stránkuje a filtruje
+testy na serveru a čte názvy ze snapshotu nejnovějšího attemptu. Legacy snapshot používá
+pouze u testů bez attemptu. Migrace databáze není potřeba.
+
+Ověření: frontend build a 27 unit testů, 22 backendových testů pro běhy, výběr,
+opakované pokusy a nové workspace API. Browser scénáře zahrnují vytvoření, mutace,
+archivaci, nezávislý detail, návrat z execution, neuložené změny, chyby API a rozměry
+1440×900, 1280×720, 390×844 a 1280×500 v obou režimech. Browser testy používají mock API,
+backendové testy izolovanou SQLite databázi. Build hlásí upozornění na JS chunk nad 500 kB.
+
+Níže je původní analýza před implementací.
+
 ## Závěr a rozsah
 
 Test Runs doporučuji převést na kompaktní pracovní plochu: vlevo filtrovaný seznam běhů, vpravo detail, příprava testů a přechod do execution. Zachovat dostupné funkce včetně založení runu z repository, přiřazení testerů a archivace.
