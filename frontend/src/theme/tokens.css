@@ -1,0 +1,203 @@
+/* Semantic colors are shared by utility classes, workspace CSS, and scoped previews. */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --ui-page: #f6f8fb;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #f1f5f9;
+  --ui-surface-raised: #ffffff;
+  --ui-text: #0f172a;
+  --ui-muted: #475569;
+  --ui-subtle: #526277;
+  --ui-border: #d5dde7;
+  --ui-control: #64748b;
+  --ui-hover: #e8edf3;
+  --ui-track: #dbe3ec;
+  --ui-overlay: #02061799;
+  --ui-accent: #0e7490;
+  --ui-accent-hover: #155e75;
+  --ui-on-accent: #ffffff;
+  --ui-link: #0e7490;
+  --ui-link-hover: #155e75;
+  --ui-selected-bg: #ecfeff;
+  --ui-selected-text: #155e75;
+  --ui-selected-border: #0e7490;
+  --ui-focus: #0e7490;
+  --ui-success: #066344;
+  --ui-success-bg: #ecfdf5;
+  --ui-success-border: #059669;
+  --ui-success-chart: #047857;
+  --ui-danger: #be123c;
+  --ui-danger-bg: #fff1f2;
+  --ui-danger-border: #e11d48;
+  --ui-danger-chart: #be123c;
+  --ui-warning: #92400e;
+  --ui-warning-bg: #fffbeb;
+  --ui-warning-border: #b45309;
+  --ui-warning-chart: #b45309;
+  --ui-info: #075985;
+  --ui-info-bg: #f0f9ff;
+  --ui-info-border: #0284c7;
+  --ui-note: #6d28d9;
+  --ui-note-bg: #f5f3ff;
+  --ui-note-border: #7c3aed;
+  --ui-not-run: #526277;
+  --ui-skipped: #475569;
+  --ui-shadow: #0f172a20;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ui-page: #0f172a;
+  --ui-surface: #1e293b;
+  --ui-surface-muted: #27364d;
+  --ui-surface-raised: #27364d;
+  --ui-text: #e2e8f0;
+  --ui-muted: #b4c2d4;
+  --ui-subtle: #a4b4c9;
+  --ui-border: #475569;
+  --ui-control: #94a3b8;
+  --ui-hover: #304158;
+  --ui-track: #475569;
+  --ui-overlay: #020617b3;
+  --ui-accent: #22d3ee;
+  --ui-accent-hover: #67e8f9;
+  --ui-on-accent: #0f172a;
+  --ui-link: #67e8f9;
+  --ui-link-hover: #a5f3fc;
+  --ui-selected-bg: #163b49;
+  --ui-selected-text: #67e8f9;
+  --ui-selected-border: #67e8f9;
+  --ui-focus: #67e8f9;
+  --ui-success: #6ee7b7;
+  --ui-success-bg: #103c32;
+  --ui-success-border: #34d399;
+  --ui-success-chart: #34d399;
+  --ui-danger: #fda4af;
+  --ui-danger-bg: #4c1b2d;
+  --ui-danger-border: #fb7185;
+  --ui-danger-chart: #fb7185;
+  --ui-warning: #fcd34d;
+  --ui-warning-bg: #422e13;
+  --ui-warning-border: #fbbf24;
+  --ui-warning-chart: #fbbf24;
+  --ui-info: #7dd3fc;
+  --ui-info-bg: #12344d;
+  --ui-info-border: #38bdf8;
+  --ui-note: #c4b5fd;
+  --ui-note-bg: #30234c;
+  --ui-note-border: #a78bfa;
+  --ui-not-run: #b4c2d4;
+  --ui-skipped: #cbd5e1;
+  --ui-shadow: #02061766;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  --ui-page: #0f172a;
+  --ui-surface: #1e293b;
+  --ui-surface-muted: #27364d;
+  --ui-surface-raised: #27364d;
+  --ui-text: #e2e8f0;
+  --ui-muted: #b4c2d4;
+  --ui-subtle: #a4b4c9;
+  --ui-border: #475569;
+  --ui-control: #94a3b8;
+  --ui-hover: #304158;
+  --ui-track: #475569;
+  --ui-overlay: #020617b3;
+  --ui-accent: #22d3ee;
+  --ui-accent-hover: #67e8f9;
+  --ui-on-accent: #0f172a;
+  --ui-link: #67e8f9;
+  --ui-link-hover: #a5f3fc;
+  --ui-selected-bg: #163b49;
+  --ui-selected-text: #67e8f9;
+  --ui-selected-border: #67e8f9;
+  --ui-focus: #67e8f9;
+  --ui-success: #6ee7b7;
+  --ui-success-bg: #103c32;
+  --ui-success-border: #34d399;
+  --ui-success-chart: #34d399;
+  --ui-danger: #fda4af;
+  --ui-danger-bg: #4c1b2d;
+  --ui-danger-border: #fb7185;
+  --ui-danger-chart: #fb7185;
+  --ui-warning: #fcd34d;
+  --ui-warning-bg: #422e13;
+  --ui-warning-border: #fbbf24;
+  --ui-warning-chart: #fbbf24;
+  --ui-info: #7dd3fc;
+  --ui-info-bg: #12344d;
+  --ui-info-border: #38bdf8;
+  --ui-note: #c4b5fd;
+  --ui-note-bg: #30234c;
+  --ui-note-border: #a78bfa;
+  --ui-not-run: #b4c2d4;
+  --ui-skipped: #cbd5e1;
+  --ui-shadow: #02061766;
+  }
+}
+@theme inline {
+  --color-page: var(--ui-page);
+  --color-surface: var(--ui-surface);
+  --color-surface-muted: var(--ui-surface-muted);
+  --color-surface-raised: var(--ui-surface-raised);
+  --color-text: var(--ui-text);
+  --color-muted: var(--ui-muted);
+  --color-subtle: var(--ui-subtle);
+  --color-border: var(--ui-border);
+  --color-control: var(--ui-control);
+  --color-hover: var(--ui-hover);
+  --color-track: var(--ui-track);
+  --color-overlay: var(--ui-overlay);
+  --color-accent: var(--ui-accent);
+  --color-accent-hover: var(--ui-accent-hover);
+  --color-on-accent: var(--ui-on-accent);
+  --color-link: var(--ui-link);
+  --color-link-hover: var(--ui-link-hover);
+  --color-selected-bg: var(--ui-selected-bg);
+  --color-selected-text: var(--ui-selected-text);
+  --color-selected-border: var(--ui-selected-border);
+  --color-focus: var(--ui-focus);
+  --color-success: var(--ui-success);
+  --color-success-bg: var(--ui-success-bg);
+  --color-success-border: var(--ui-success-border);
+  --color-success-chart: var(--ui-success-chart);
+  --color-danger: var(--ui-danger);
+  --color-danger-bg: var(--ui-danger-bg);
+  --color-danger-border: var(--ui-danger-border);
+  --color-danger-chart: var(--ui-danger-chart);
+  --color-warning: var(--ui-warning);
+  --color-warning-bg: var(--ui-warning-bg);
+  --color-warning-border: var(--ui-warning-border);
+  --color-warning-chart: var(--ui-warning-chart);
+  --color-info: var(--ui-info);
+  --color-info-bg: var(--ui-info-bg);
+  --color-info-border: var(--ui-info-border);
+  --color-note: var(--ui-note);
+  --color-note-bg: var(--ui-note-bg);
+  --color-note-border: var(--ui-note-border);
+  --color-not-run: var(--ui-not-run);
+  --color-skipped: var(--ui-skipped);
+  --color-shadow: var(--ui-shadow);
+}
+@layer base {
+  *, ::before, ::after { border-color: var(--ui-border); }
+  input, select, textarea { accent-color: var(--ui-accent); }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea {
+    background-color: var(--ui-surface); color: var(--ui-text); border-color: var(--ui-control);
+  }
+  ::placeholder { color: var(--ui-subtle); opacity: 1; }
+  ::selection { color: var(--ui-selected-text); background: var(--ui-selected-bg); }
+  :focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 3px; }
+  /* Opaque offset keeps the focus boundary distinct from colored controls. */
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+    box-shadow: 0 0 0 3px var(--ui-surface);
+  }
+}
+@layer components {
+  .appearance-preview { background: var(--ui-page); color: var(--ui-text); }
+  .appearance-preview :focus-visible { outline-color: var(--ui-focus); }
+  .workspace-selected { background: var(--ui-selected-bg); color: var(--ui-selected-text); border-color: var(--ui-selected-border); }
+  .workspace-selected:hover { background: var(--ui-selected-bg); }
+}
+

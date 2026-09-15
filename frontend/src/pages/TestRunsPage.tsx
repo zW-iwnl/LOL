@@ -33,10 +33,10 @@ const statusLabels: Record<TestRunStatus, string> = {
 };
 
 const statusClasses: Record<TestRunStatus, string> = {
-  open: "bg-sky-50 text-sky-700 ring-sky-200",
-  in_progress: "bg-amber-50 text-amber-700 ring-amber-200",
-  completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  archived: "bg-slate-100 text-slate-600 ring-slate-200",
+  open: "bg-info-bg text-info ring-info-border",
+  in_progress: "bg-warning-bg text-warning ring-warning-border",
+  completed: "bg-success-bg text-success ring-success-border",
+  archived: "bg-surface-muted text-muted ring-border",
 };
 
 type ModalMode = "edit" | "detail";
@@ -144,16 +144,16 @@ function CasePickerFilters({ query, status, onQueryChange, onStatusChange }: Cas
   return (
     <div className="mt-3 grid gap-2 md:grid-cols-[1fr_150px]">
       <label className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" size={16} />
         <input
-          className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm"
+          className="w-full rounded-md border border-control py-2 pl-9 pr-3 text-sm"
           placeholder="Hledat podle kódu nebo názvu"
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </label>
-      <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={status} onChange={(event) => onStatusChange(event.target.value)}>
+      <select className="rounded-md border border-control px-3 py-2 text-sm" value={status} onChange={(event) => onStatusChange(event.target.value)}>
         <option value="">Všechny statusy</option>
         <option value="ready">Ready</option>
         <option value="draft">Draft</option>
@@ -172,9 +172,9 @@ type CasePickerListProps = {
 
 function CasePickerList({ testCases, selectedCaseIds, onToggle, emptyText = "Nejsou dostupné žádné test cases." }: CasePickerListProps) {
   return (
-    <div className="max-h-56 overflow-auto rounded-md border border-slate-200">
+    <div className="max-h-56 overflow-auto rounded-md border border-border">
       {testCases.map((testCase) => (
-        <label key={testCase.id} className="flex items-start gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0">
+        <label key={testCase.id} className="flex items-start gap-3 border-b border-border px-4 py-3 text-sm last:border-b-0">
           <input
             className="mt-1"
             checked={selectedCaseIds.includes(testCase.id)}
@@ -183,11 +183,11 @@ function CasePickerList({ testCases, selectedCaseIds, onToggle, emptyText = "Nej
           />
           <span>
             <span className="font-medium">{testCase.code} - {testCase.title}</span>
-            <span className="mt-1 block text-xs text-slate-500">{testCase.status}</span>
+            <span className="mt-1 block text-xs text-muted">{testCase.status}</span>
           </span>
         </label>
       ))}
-      {testCases.length === 0 && <div className="px-4 py-6 text-sm text-slate-500">{emptyText}</div>}
+      {testCases.length === 0 && <div className="px-4 py-6 text-sm text-muted">{emptyText}</div>}
     </div>
   );
 }
@@ -424,7 +424,7 @@ export function TestRunsPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <PageHeader title="Test Runs" description="Plánování, správa a sledování běhů testování." />
-        <button className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={openCreate} aria-expanded={createOpen} aria-controls="test-run-create" type="button">
+        <button className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent" onClick={openCreate} aria-expanded={createOpen} aria-controls="test-run-create" type="button">
           <Plus size={16} /> Nový test run
         </button>
       </div>
@@ -437,35 +437,35 @@ export function TestRunsPage() {
         setEnvironmentFilter("");
         setRefreshKey((value) => value + 1);
       }} />}
-      {createdRun && <p role="status" className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
+      {createdRun && <p role="status" className="rounded-md bg-success-bg p-3 text-sm text-success">
         Test run „{createdRun.name}“ byl vytvořen. <Link className="underline" to={`/test-runs/${createdRun.id}/execution`}>Pokračovat v testování</Link>
       </p>}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-md border border-slate-200 bg-white p-5">
-          <div className="text-sm text-slate-500">Celkem test runů</div>
+        <article className="rounded-md border border-border bg-surface p-5">
+          <div className="text-sm text-muted">Celkem test runů</div>
           <div className="mt-3 text-2xl font-semibold">{kpis.total}</div>
         </article>
-        <article className="rounded-md border border-slate-200 bg-white p-5">
-          <div className="text-sm text-slate-500">Aktivní runy</div>
+        <article className="rounded-md border border-border bg-surface p-5">
+          <div className="text-sm text-muted">Aktivní runy</div>
           <div className="mt-3 text-2xl font-semibold">{kpis.active}</div>
         </article>
-        <article className="rounded-md border border-slate-200 bg-white p-5">
-          <div className="text-sm text-slate-500">Dokončené runy</div>
+        <article className="rounded-md border border-border bg-surface p-5">
+          <div className="text-sm text-muted">Dokončené runy</div>
           <div className="mt-3 text-2xl font-semibold">{kpis.completed}</div>
         </article>
-        <article className="rounded-md border border-slate-200 bg-white p-5">
-          <div className="text-sm text-slate-500">Průměrný pass rate dokončených hodnocení</div>
+        <article className="rounded-md border border-border bg-surface p-5">
+          <div className="text-sm text-muted">Průměrný pass rate dokončených hodnocení</div>
           <div className="mt-3 text-2xl font-semibold">{kpis.averagePassRate}%</div>
         </article>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white">
-        <div className="flex flex-col gap-3 border-b border-slate-200 p-5 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-md border border-border bg-surface">
+        <div className="flex flex-col gap-3 border-b border-border p-5 xl:flex-row xl:items-center xl:justify-between">
           <label className="relative w-full xl:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" size={18} />
             <input
-              className="w-full rounded-md border border-slate-200 py-2 pl-10 pr-3 text-sm outline-none ring-cyan-500 transition focus:border-cyan-500 focus:ring-2"
+              className="w-full rounded-md border border-control py-2 pl-10 pr-3 text-sm outline-none ring-focus transition focus:border-focus focus:ring-2"
               placeholder="Hledat test run..."
               type="search"
               value={query}
@@ -473,14 +473,14 @@ export function TestRunsPage() {
             />
           </label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={statusFilter} onChange={(event) => { setOffset(0); setStatusFilter(event.target.value as TestRunStatus | ""); }}>
+            <select className="rounded-md border border-control px-3 py-2 text-sm" value={statusFilter} onChange={(event) => { setOffset(0); setStatusFilter(event.target.value as TestRunStatus | ""); }}>
               <option value="">Vše</option>
               <option value="open">Otevřené</option>
               <option value="in_progress">Probíhá</option>
               <option value="completed">Dokončené</option>
               <option value="archived">Archivované</option>
             </select>
-            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={environmentFilter} onChange={(event) => { setOffset(0); setEnvironmentFilter(event.target.value); }}>
+            <select className="rounded-md border border-control px-3 py-2 text-sm" value={environmentFilter} onChange={(event) => { setOffset(0); setEnvironmentFilter(event.target.value); }}>
               <option value="">Vše</option>
               <option value="DEV">DEV</option>
               <option value="TEST">TEST</option>
@@ -490,20 +490,20 @@ export function TestRunsPage() {
           </div>
         </div>
 
-        {pageError && <div className="m-5 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{pageError}</div>}
+        {pageError && <div className="m-5 rounded-md bg-danger-bg p-3 text-sm text-danger">{pageError}</div>}
 
         {runs.length === 0 ? (
           <div className="px-5 py-14 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-slate-100 text-slate-500">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-surface-muted text-muted">
               <PlayCircle size={22} />
             </div>
             <h2 className="mt-4 font-semibold">Žádné test runy</h2>
-            <p className="mt-1 text-sm text-slate-500">Změň filtr nebo založ první test run.</p>
+            <p className="mt-1 text-sm text-muted">Změň filtr nebo založ první test run.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500">
+              <thead className="bg-surface-muted text-muted">
                 <tr>
                   <th className="px-5 py-3 font-medium">Název</th>
                   <th className="px-5 py-3 font-medium">Verze</th>
@@ -518,43 +518,43 @@ export function TestRunsPage() {
                 {runs.map((run) => {
                   const summary = resultSummary(run.test_run_cases);
                   return (
-                    <tr key={run.id} className={`border-t border-slate-100 ${createdRun?.id === run.id ? "bg-cyan-50" : ""}`}>
+                    <tr key={run.id} className={`border-t border-border ${createdRun?.id === run.id ? "bg-selected-bg" : ""}`}>
                       <td className="px-5 py-4">
                         <div className="font-semibold">{run.name}</div>
-                        {run.task_number && <div className="mt-1 text-xs font-medium text-cyan-800">{run.task_number}</div>}
-                        <div className="mt-1 text-xs text-slate-500">{run.description ?? "-"}</div>
+                        {run.task_number && <div className="mt-1 text-xs font-medium text-link">{run.task_number}</div>}
+                        <div className="mt-1 text-xs text-muted">{run.description ?? "-"}</div>
                       </td>
                       <td className="px-5 py-4">{run.version ?? "-"}</td>
                       <td className="px-5 py-4">{run.environment ?? "-"}</td>
                       <td className="px-5 py-4">{statusBadge(run.status)}</td>
-                      <td className="px-5 py-4 text-slate-600">
+                      <td className="px-5 py-4 text-muted">
                         <div>{formatDateTime(run.planned_start)}</div>
-                        <div className="text-xs text-slate-500">{formatDateTime(run.planned_end)}</div>
+                        <div className="text-xs text-muted">{formatDateTime(run.planned_end)}</div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-24 rounded-full bg-slate-100">
-                            <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${summary.passRate}%` }} />
+                          <div className="h-2 w-24 rounded-full bg-surface-muted">
+                            <div className="h-2 rounded-full bg-success-chart" style={{ width: `${summary.passRate}%` }} />
                           </div>
                           <span className="text-xs font-medium">{summary.passRate}%</span>
                         </div>
-                        <div className="mt-2 text-xs text-slate-500">
+                        <div className="mt-2 text-xs text-muted">
                           P {summary.counts.passed} / F {summary.counts.failed} / B {summary.counts.blocked} / S {summary.counts.skipped} / N {summary.counts.not_run}
                         </div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
-                          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" onClick={() => openDetail(run)} type="button">
+                          <button className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium" onClick={() => openDetail(run)} type="button">
                             <Eye size={14} /> Detail
                           </button>
-                          <Link className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" to={withReturn(`/test-runs/${run.id}/execution`, "/test-runs")}>
+                          <Link className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium" to={withReturn(`/test-runs/${run.id}/execution`, "/test-runs")}>
                             <PlayCircle size={14} /> Pokračovat v testování
                           </Link>
-                          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" onClick={() => openEdit(run)} type="button">
+                          <button className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium" onClick={() => openEdit(run)} type="button">
                             <Pencil size={14} /> Upravit
                           </button>
                           <button
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={run.status === "archived"}
                             onClick={() => void handleArchive(run)}
                             type="button"
@@ -574,15 +574,15 @@ export function TestRunsPage() {
       </section>
 
       {modalMode && (
-        <div className="fixed inset-0 z-30 grid place-items-center bg-slate-950/40 px-4 py-6">
-          <form className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-md bg-white p-5 shadow-xl" onSubmit={(event) => void handleSubmit(event)}>
+        <div className="fixed inset-0 z-30 grid place-items-center bg-overlay px-4 py-6">
+          <form className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-md bg-surface p-5 shadow-xl shadow-shadow" onSubmit={(event) => void handleSubmit(event)}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">
                   {modalMode === "edit" ? "Upravit test run" : "Detail test runu"}
                 </h2>
               </div>
-              <button className="rounded-md p-1 text-slate-500 hover:bg-slate-100" onClick={closeModal} type="button">
+              <button className="rounded-md p-1 text-muted hover:bg-surface-muted" onClick={closeModal} type="button">
                 <X size={18} />
               </button>
             </div>
@@ -592,23 +592,23 @@ export function TestRunsPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                 <label className="block text-sm md:col-span-2">
                   <span className="font-medium">Název úkolu</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Číslo úkolu</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" maxLength={100} value={form.task_number} onChange={(event) => setForm((current) => ({ ...current, task_number: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" maxLength={100} value={form.task_number} onChange={(event) => setForm((current) => ({ ...current, task_number: event.target.value }))} />
                 </label>
                 <label className="block text-sm md:col-span-2">
                   <span className="font-medium">Popis</span>
-                  <textarea className="mt-1 min-h-24 w-full rounded-md border border-slate-200 px-3 py-2" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
+                  <textarea className="mt-1 min-h-24 w-full rounded-md border border-control px-3 py-2" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Verze</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={form.version} onChange={(event) => setForm((current) => ({ ...current, version: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" value={form.version} onChange={(event) => setForm((current) => ({ ...current, version: event.target.value }))} />
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Prostředí</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" list="test-run-environments" value={form.environment} onChange={(event) => setForm((current) => ({ ...current, environment: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" list="test-run-environments" value={form.environment} onChange={(event) => setForm((current) => ({ ...current, environment: event.target.value }))} />
                   <datalist id="test-run-environments">
                     <option value="DEV" />
                     <option value="TEST" />
@@ -618,7 +618,7 @@ export function TestRunsPage() {
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Status</span>
-                  <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as TestRunStatus }))}>
+                  <select className="mt-1 w-full rounded-md border border-control px-3 py-2" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as TestRunStatus }))}>
                     <option value="open">Otevřený</option>
                     <option value="in_progress">Probíhá</option>
                     <option value="completed">Dokončený</option>
@@ -627,42 +627,42 @@ export function TestRunsPage() {
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Plánovaný začátek</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="datetime-local" value={form.planned_start} onChange={(event) => setForm((current) => ({ ...current, planned_start: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" type="datetime-local" value={form.planned_start} onChange={(event) => setForm((current) => ({ ...current, planned_start: event.target.value }))} />
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium">Plánovaný konec</span>
-                  <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" type="datetime-local" value={form.planned_end} onChange={(event) => setForm((current) => ({ ...current, planned_end: event.target.value }))} />
+                  <input className="mt-1 w-full rounded-md border border-control px-3 py-2" type="datetime-local" value={form.planned_end} onChange={(event) => setForm((current) => ({ ...current, planned_end: event.target.value }))} />
                 </label>
                 </div>
               </div>
             ) : selectedRunLatest ? (
               <div className="mt-5 space-y-5">
-                <div className="grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-3">
-                  <div><span className="text-slate-500">Název:</span> {selectedRunLatest.name}</div>
-                  <div><span className="text-slate-500">Číslo úkolu:</span> {selectedRunLatest.task_number ?? "-"}</div>
-                  <div><span className="text-slate-500">Verze:</span> {selectedRunLatest.version ?? "-"}</div>
-                  <div><span className="text-slate-500">Prostředí:</span> {selectedRunLatest.environment ?? "-"}</div>
-                  <div><span className="text-slate-500">Stav:</span> {statusLabels[selectedRunLatest.status]}</div>
-                  <div><span className="text-slate-500">Plán start:</span> {formatDateTime(selectedRunLatest.planned_start)}</div>
-                  <div><span className="text-slate-500">Plán konec:</span> {formatDateTime(selectedRunLatest.planned_end)}</div>
+                <div className="grid gap-3 rounded-md bg-surface-muted p-4 text-sm md:grid-cols-3">
+                  <div><span className="text-muted">Název:</span> {selectedRunLatest.name}</div>
+                  <div><span className="text-muted">Číslo úkolu:</span> {selectedRunLatest.task_number ?? "-"}</div>
+                  <div><span className="text-muted">Verze:</span> {selectedRunLatest.version ?? "-"}</div>
+                  <div><span className="text-muted">Prostředí:</span> {selectedRunLatest.environment ?? "-"}</div>
+                  <div><span className="text-muted">Stav:</span> {statusLabels[selectedRunLatest.status]}</div>
+                  <div><span className="text-muted">Plán start:</span> {formatDateTime(selectedRunLatest.planned_start)}</div>
+                  <div><span className="text-muted">Plán konec:</span> {formatDateTime(selectedRunLatest.planned_end)}</div>
                 </div>
 
                 <div className="flex justify-end">
-                  <Link className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-3 py-2 text-sm font-medium text-white" to={`/test-runs/${selectedRunLatest.id}/execution`}>
+                  <Link className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent" to={`/test-runs/${selectedRunLatest.id}/execution`}>
                     <PlayCircle size={16} /> Otevřít execution
                   </Link>
                 </div>
 
-                <section className="rounded-md border border-slate-200">
-                  <div className="border-b border-slate-200 px-4 py-3 font-semibold">Přiřazené test cases</div>
+                <section className="rounded-md border border-border">
+                  <div className="border-b border-border px-4 py-3 font-semibold">Přiřazené test cases</div>
                   <div className="max-h-60 overflow-auto">
                     {selectedRunLatest.test_run_cases.map((runCase) => {
                       const testCase = testCases.find((item) => item.id === runCase.test_case_id);
                       return (
-                        <div key={runCase.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_180px_120px_96px]">
+                        <div key={runCase.id} className="grid gap-2 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_180px_120px_96px]">
                           <div className="font-medium">{runCase.code ? `${runCase.code} · ${runCase.title ?? ""}` : testCase ? `${testCase.code} · ${testCase.title}` : `Test #${runCase.test_case_id}`}</div>
                           <select
-                            className="rounded-md border border-slate-200 px-2 py-1 text-sm"
+                            className="rounded-md border border-control px-2 py-1 text-sm"
                             disabled={saving || selectedRunLatest.status === "archived"}
                             value={runCase.assigned_to ?? ""}
                             onChange={(event) => void handleAssignRunCase(runCase, event.target.value)}
@@ -674,7 +674,7 @@ export function TestRunsPage() {
                           </select>
                           <div>{resultLabel(runCase.result)}</div>
                           <button
-                            className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={saving || selectedRunLatest.status === "archived" || runCase.result !== "not_run"}
                             onClick={() => void handleRemoveRunCase(runCase)}
                             type="button"
@@ -684,13 +684,13 @@ export function TestRunsPage() {
                         </div>
                       );
                     })}
-                    {selectedRunLatest.test_run_cases.length === 0 && <div className="px-4 py-6 text-sm text-slate-500">Zatím nejsou přiřazené žádné test cases.</div>}
+                    {selectedRunLatest.test_run_cases.length === 0 && <div className="px-4 py-6 text-sm text-muted">Zatím nejsou přiřazené žádné test cases.</div>}
                   </div>
                 </section>
 
-                <section className="rounded-md border border-slate-200 p-4">
+                <section className="rounded-md border border-border p-4">
                   <div className="font-semibold">Přidat test cases</div>
-                  {casesState.error && <p role="alert" className="text-sm text-rose-700">{casesState.error}</p>}
+                  {casesState.error && <p role="alert" className="text-sm text-danger">{casesState.error}</p>}
                   {casesState.loading && <p role="status" className="text-xs">Načítám dostupné testy…</p>}
                   <CasePickerFilters
                     query={caseQuery}
@@ -710,19 +710,19 @@ export function TestRunsPage() {
                       }
                     />
                     <div>
-                      <button className="mb-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={filteredAvailableIds.length === 0} onClick={toggleAllFilteredCases} type="button">
+                      <button className="mb-3 w-full rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-50" disabled={filteredAvailableIds.length === 0} onClick={toggleAllFilteredCases} type="button">
                         {allFilteredSelected ? "Odznačit zobrazené" : "Vybrat zobrazené"}
                       </button>
                       <label className="block text-sm">
                         <span className="font-medium">Tester</span>
-                        <select className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
+                        <select className="mt-1 w-full rounded-md border border-control px-3 py-2" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
                           <option value="">Nepřiřazeno</option>
                           {users.map((user) => (
                             <option key={user.id} value={user.id}>{user.name}</option>
                           ))}
                         </select>
                       </label>
-                      <button className="mt-4 w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={saving || selectedCaseIds.length === 0} onClick={() => void handleAddCases()} type="button">
+                      <button className="mt-4 w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60" disabled={saving || selectedCaseIds.length === 0} onClick={() => void handleAddCases()} type="button">
                         Přidat do test runu
                       </button>
                     </div>
@@ -732,14 +732,14 @@ export function TestRunsPage() {
               </div>
             ) : null}
 
-            {formError && <div className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{formError}</div>}
+            {formError && <div className="mt-4 rounded-md bg-danger-bg p-3 text-sm text-danger">{formError}</div>}
 
             <div className="mt-5 flex justify-end gap-2">
-              <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium" onClick={closeModal} type="button">
+              <button className="rounded-md border border-border px-4 py-2 text-sm font-medium" onClick={closeModal} type="button">
                 Zavřít
               </button>
               {modalMode !== "detail" ? (
-                <button className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={saving} type="submit">
+                <button className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent disabled:opacity-60" disabled={saving} type="submit">
                   {saving ? "Ukládám..." : "Uložit"}
                 </button>
               ) : null}

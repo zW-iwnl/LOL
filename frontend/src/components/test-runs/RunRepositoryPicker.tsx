@@ -18,15 +18,15 @@ export function RunRepositoryPicker({ catalog, selection, onChange }: Props) {
       : [...selection.groups, { group_id: groupId, include_descendants: true }] });
   }
   function caseList(ids: number[]) {
-    return <ul className="my-2 max-h-40 overflow-auto pl-4 text-xs text-slate-600">
+    return <ul className="my-2 max-h-40 overflow-auto pl-4 text-xs text-muted">
       {getCases(ids).map((item) => <li key={item.id} className="py-1">{item.code} — {item.title}
-        {item.exclusion_reason && <span className="ml-2 text-amber-800">({item.exclusion_reason})</span>}
+        {item.exclusion_reason && <span className="ml-2 text-warning">({item.exclusion_reason})</span>}
       </li>)}
       {!ids.length && <li>Žádné testy.</li>}
     </ul>;
   }
   function suiteRow(suite: SelectionSuite) {
-    return <div key={suite.id} className="border-b border-slate-100 p-3 last:border-0">
+    return <div key={suite.id} className="border-b border-border p-3 last:border-0">
       <label className="flex items-center gap-3 text-sm">
         <input type="checkbox" checked={selection.suite_ids.includes(suite.id)}
           onChange={() => onChange({ ...selection, suite_ids: toggleId(selection.suite_ids, suite.id) })} />
@@ -41,7 +41,7 @@ export function RunRepositoryPicker({ catalog, selection, onChange }: Props) {
     if (path.includes(group.id)) return null;
     const entry = selection.groups.find((item) => item.group_id === group.id);
     const ids = entry?.include_descendants === false ? group.own_case_ids : group.case_ids;
-    return <div key={group.id} className="border-b border-slate-100 p-3 last:border-0">
+    return <div key={group.id} className="border-b border-border p-3 last:border-0">
       <label className="flex items-center gap-3 text-sm">
         <input type="checkbox" checked={!!entry} onChange={() => toggleGroup(group.id)} />
         <span className="flex-1 font-medium">{group.name}</span><span>Dostupné testy: {count(ids)}</span>
@@ -59,7 +59,7 @@ export function RunRepositoryPicker({ catalog, selection, onChange }: Props) {
           const next = catalog.groups.find((item) => item.id === child.group_id);
           return next ? groupRow(next, [...path, group.id], child.include_descendants) : null;
         })}
-        {!expand && <p className="py-2 text-slate-500">Toto umístění nepokračuje do dalších potomků. Samostatný výběr skupiny má rozsah uvedený u checkboxu.</p>}
+        {!expand && <p className="py-2 text-muted">Toto umístění nepokračuje do dalších potomků. Samostatný výběr skupiny má rozsah uvedený u checkboxu.</p>}
       </details>
     </div>;
   }
@@ -70,25 +70,25 @@ export function RunRepositoryPicker({ catalog, selection, onChange }: Props) {
   return <section className="space-y-3" aria-label="Výběr testů">
     <h3 className="font-semibold">Výběr testů</h3>
     <input type="search" aria-label="Hledat skupiny, suity nebo testy" placeholder="Hledat podle názvu nebo tagu…"
-      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} />
-    <p className="text-xs text-slate-500">Tag hledá v obsahu. Zaškrtnutí skupiny nebo suity zahrne celý její schválený obsah. Výběr zůstává zachovaný při filtrování.</p>
+      className="w-full rounded-md border border-control px-3 py-2 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} />
+    <p className="text-xs text-muted">Tag hledá v obsahu. Zaškrtnutí skupiny nebo suity zahrne celý její schválený obsah. Výběr zůstává zachovaný při filtrování.</p>
     <div className="flex gap-2" role="tablist" aria-label="Typ výběru">
       {([["groups", "Skupiny"], ["suites", "Test suity"], ["cases", "Jednotlivé testy"]] as const).map(([value, label]) =>
         <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
-          className={`rounded-md px-3 py-2 text-sm ${tab === value ? "bg-cyan-700 text-white" : "bg-slate-100"}`}>{label}</button>)}
+          className={`rounded-md px-3 py-2 text-sm ${tab === value ? "bg-accent text-on-accent" : "bg-surface-muted"}`}>{label}</button>)}
     </div>
-    <div className="max-h-96 overflow-auto rounded-md border border-slate-200" role="tabpanel" aria-label={tab === "groups" ? "Skupiny" : tab === "suites" ? "Test suity" : "Jednotlivé testy"}>
+    <div className="max-h-96 overflow-auto rounded-md border border-border" role="tabpanel" aria-label={tab === "groups" ? "Skupiny" : tab === "suites" ? "Test suity" : "Jednotlivé testy"}>
       {tab === "groups" && groups.map((group) => groupRow(group))}
       {tab === "suites" && suites.map(suiteRow)}
-      {tab === "cases" && filteredCases.map((item) => <label key={item.id} className="flex items-start gap-3 border-b border-slate-100 p-3 text-sm">
+      {tab === "cases" && filteredCases.map((item) => <label key={item.id} className="flex items-start gap-3 border-b border-border p-3 text-sm">
         <input type="checkbox" disabled={!!item.exclusion_reason} checked={selection.test_case_ids.includes(item.id)}
           onChange={() => onChange({ ...selection, test_case_ids: toggleId(selection.test_case_ids, item.id) })} />
-        <span>{item.code} — {item.title}<span className="block text-xs text-slate-500">{item.tags.join(" · ")}</span>
-          {item.exclusion_reason ? <span className="text-xs text-amber-800">{item.exclusion_reason}</span>
-            : selectedIds.has(item.id) && !selection.test_case_ids.includes(item.id) && <span className="text-xs text-cyan-800">Zahrnuto přes skupinu nebo suitu</span>}
+        <span>{item.code} — {item.title}<span className="block text-xs text-muted">{item.tags.join(" · ")}</span>
+          {item.exclusion_reason ? <span className="text-xs text-warning">{item.exclusion_reason}</span>
+            : selectedIds.has(item.id) && !selection.test_case_ids.includes(item.id) && <span className="text-xs text-link">Zahrnuto přes skupinu nebo suitu</span>}
         </span>
       </label>)}
-      {empty && <p className="p-4 text-sm text-slate-500">Žádná položka neodpovídá hledání.</p>}
+      {empty && <p className="p-4 text-sm text-muted">Žádná položka neodpovídá hledání.</p>}
     </div>
   </section>;
 }

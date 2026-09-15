@@ -23,12 +23,12 @@ export function GroupRelations({ group, index, suites, tags, busy, refreshKey, o
     <table className="repository-table"><thead><tr><th>Vztah</th><th>Položka</th><th>Další potomci</th><th>Akce</th></tr></thead><tbody>
       {rows.slice(page * 50, page * 50 + 50).map(row => <tr key={`${row.kind}:${row.id}`}>
         <td>{row.kind === "parent" ? "Nadřazená skupina" : row.kind === "child" ? "Podřazená skupina" : "Test suita"}</td>
-        <td>{row.kind === "suite" ? row.name : <button type="button" className="text-cyan-800" disabled={busy} onClick={() => onOpenGroup(row.id)}>{row.name}</button>}</td>
+        <td>{row.kind === "suite" ? row.name : <button type="button" className="text-link" disabled={busy} onClick={() => onOpenGroup(row.id)}>{row.name}</button>}</td>
         <td>{row.include !== null ? <label className="flex items-center gap-1"><input type="checkbox" aria-label={`Zahrnout potomky: ${row.name}`} checked={row.include} disabled={busy} onChange={event => onScope(row.kind === "parent" ? row.id : group.id, row.kind === "parent" ? group.id : row.id, event.target.checked)} />{row.include ? "Ano" : "Ne"}</label> : "—"}</td>
-        <td><button type="button" className="text-xs text-rose-700" disabled={busy} onClick={() => onRemove(row.kind, row.id)}>Odebrat vazbu</button></td>
+        <td><button type="button" className="text-xs text-danger" disabled={busy} onClick={() => onRemove(row.kind, row.id)}>Odebrat vazbu</button></td>
       </tr>)}
     </tbody></table>
-    {!rows.length && <p className="text-sm text-slate-500">Žádné odpovídající vazby.</p>}
+    {!rows.length && <p className="text-sm text-muted">Žádné odpovídající vazby.</p>}
     {rows.length > 50 && <div className="repository-pagination"><span>{page * 50 + 1}–{Math.min(page * 50 + 50, rows.length)} z {rows.length}</span><div><button className="workspace-button" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Předchozí</button><button className="workspace-button" disabled={(page + 1) * 50 >= rows.length} onClick={() => setPage(value => value + 1)}>Další</button></div></div>}
     <RepositoryCaseTable key={group.id} scope={{ groupId: group.id, directOnly: true, includeDescendants: false }} title="Přímé odkazy na test cases" compact suites={suites} tags={tags} refreshKey={refreshKey} onOpen={onOpenCase} onUnlink={item => onRemoveCase(item.id)} />
   </div>;

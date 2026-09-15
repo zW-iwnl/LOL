@@ -20,7 +20,7 @@ export default function App() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="grid min-h-screen place-items-center bg-[#f6f8fb] text-sm text-slate-500">Načítám aplikaci...</div>;
+    return <div className="grid min-h-screen place-items-center bg-page text-sm text-muted">Načítám aplikaci...</div>;
   }
 
   if (!user) {

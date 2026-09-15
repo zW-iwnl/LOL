@@ -70,7 +70,7 @@ export function AccessibleDialog({
 
   return (
     <div
-      className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-slate-950/40 p-4"
+      className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-overlay p-4"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) onClose();
       }}
@@ -78,7 +78,7 @@ export function AccessibleDialog({
       <div
         aria-labelledby={titleId}
         aria-modal="true"
-        className={`my-auto max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-md bg-white p-5 shadow-xl ${panelClassName}`}
+        className={`my-auto max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-md bg-surface p-5 shadow-xl shadow-shadow ${panelClassName}`}
         ref={panelRef}
         role="dialog"
         tabIndex={-1}
@@ -87,7 +87,7 @@ export function AccessibleDialog({
           <h2 className="text-lg font-semibold" id={titleId}>{title}</h2>
           <button
             aria-label="Zavřít dialog"
-            className="grid h-11 w-11 place-items-center rounded-md hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-700"
+            className="grid h-11 w-11 place-items-center rounded-md hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             type="button"
             onClick={onClose}
           >

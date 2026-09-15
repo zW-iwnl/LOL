@@ -362,7 +362,7 @@ export function TestCasesPage() {
         />
         <ErrorState message={loadError} />
         <button
-          className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent"
           type="button"
           onClick={refresh}
         >
@@ -379,20 +379,20 @@ export function TestCasesPage() {
         <div
           aria-live="polite"
           className={feedback.kind === "error"
-            ? "rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"
-            : "rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"}
+            ? "rounded-md border border-danger-border bg-danger-bg p-3 text-sm text-danger"
+            : "rounded-md border border-success-border bg-success-bg p-3 text-sm text-success"}
           role={feedback.kind === "error" ? "alert" : "status"}
         >
           {feedback.message}
         </div>
       )}
 
-      <section className="rounded-md border border-slate-200 bg-white">
+      <section className="rounded-md border border-border bg-surface">
         <RepositorySearch
           compact
           activeFilterChips={([
             ["businessAreaId", businessAreaFilterIds], ["applicationDomainId", applicationDomainFilterIds], ["objectTypeId", objectTypeFilterIds],
-          ] as const).flatMap(([parameter, ids]) => ids.map(id => <button type="button" key={`${parameter}:${id}`} className="rounded bg-cyan-50 px-2 py-1 text-cyan-800" onClick={() => setRepositoryTagFilter(parameter, ids.filter(value => value !== id))}>{tags.find(tag => tag.id === id)?.name ?? `#${id}`} ×</button>))}
+          ] as const).flatMap(([parameter, ids]) => ids.map(id => <button type="button" key={`${parameter}:${id}`} className="rounded bg-selected-bg px-2 py-1 text-link" onClick={() => setRepositoryTagFilter(parameter, ids.filter(value => value !== id))}>{tags.find(tag => tag.id === id)?.name ?? `#${id}`} ×</button>))}
           applicationDomainIds={applicationDomainFilterIds}
           businessAreaIds={businessAreaFilterIds}
           filterControls={(
@@ -541,7 +541,7 @@ function SuiteModal({
     >
       <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
         {continuingToCase && (
-          <p className="rounded-md bg-cyan-50 p-3 text-sm text-cyan-900">
+          <p className="rounded-md bg-info-bg p-3 text-sm text-info">
             Každý test case musí patřit do test suity. Po jejím uložení se automaticky otevře formulář test case.
           </p>
         )}
@@ -549,7 +549,7 @@ function SuiteModal({
         <label className="block text-sm">
           <span className="font-medium">Název *</span>
           <input
-            className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+            className="mt-1 w-full rounded-md border border-control px-3 py-2"
             required
             value={form.name}
             onChange={(event) => onChange({ ...form, name: event.target.value })}
@@ -558,20 +558,20 @@ function SuiteModal({
         <label className="block text-sm">
           <span className="font-medium">Popis</span>
           <textarea
-            className="mt-1 min-h-20 w-full rounded-md border border-slate-200 px-3 py-2"
+            className="mt-1 min-h-20 w-full rounded-md border border-control px-3 py-2"
             value={form.description}
             onChange={(event) => onChange({ ...form, description: event.target.value })}
           />
         </label>
-        <fieldset className="rounded-md border border-slate-200 p-3">
+        <fieldset className="rounded-md border border-border p-3">
           <legend className="px-1 text-sm font-medium">Skupiny</legend>
           <input type="search" aria-label="Hledat skupiny pro suitu" className="workspace-input mb-2 w-full" value={groupQuery} onChange={event => setGroupQuery(event.target.value)} />
-          <p className="mb-2 text-xs text-slate-500">Vybráno {form.groupIds.length} skupin</p>
+          <p className="mb-2 text-xs text-muted">Vybráno {form.groupIds.length} skupin</p>
           <div className="h-56"><VirtualList items={groups.filter(group => normalizeSearch(`${group.id} ${group.name}`).includes(normalizeSearch(groupQuery)))} itemKey={group => group.id} label="Skupiny suity" render={group =>
             <label className="flex h-9 items-center gap-2 text-sm"><input data-focus-target type="checkbox" checked={form.groupIds.includes(group.id)} onChange={event => onChange({ ...form, groupIds: event.target.checked ? [...form.groupIds, group.id] : form.groupIds.filter(id => id !== group.id) })} /><span className="truncate">#{group.id} {group.name}</span></label>
           } /></div>
         </fieldset>
-        <label className="flex items-center justify-between rounded-md bg-slate-50 p-3 text-sm">
+        <label className="flex items-center justify-between rounded-md bg-surface-muted p-3 text-sm">
           <span className="font-medium">Aktivní</span>
           <input
             checked={form.isActive}
@@ -587,11 +587,11 @@ function SuiteModal({
 
 function ModalActions({ saving, onClose }: { saving: boolean; onClose: () => void }) {
   return (
-    <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-      <button className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:opacity-50" disabled={saving} type="button" onClick={onClose}>
+    <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <button className="rounded-md border border-border px-4 py-2 text-sm disabled:opacity-50" disabled={saving} type="button" onClick={onClose}>
         Zrušit
       </button>
-      <button className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={saving} type="submit">
+      <button className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent disabled:opacity-50" disabled={saving} type="submit">
         <Check size={16} /> {saving ? "Ukládám…" : "Uložit"}
       </button>
 
@@ -602,7 +602,7 @@ function ModalActions({ saving, onClose }: { saving: boolean; onClose: () => voi
 function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+    <div role="alert" className="rounded-md border border-danger-border bg-danger-bg p-3 text-sm text-danger">
       {message}
     </div>
   );

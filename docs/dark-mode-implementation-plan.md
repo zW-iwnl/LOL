@@ -1,4 +1,4 @@
-> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+> Historický podklad: pro aktuální frontend a vlastní barvy použijte [analýzu vzhledu z 15. září 2026](appearance-settings-analysis.md). Níže uvedený rozsah a odhady již neodpovídají současným obrazovkám. Modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
 
 # Dark mode – analýza a implementační plán
 

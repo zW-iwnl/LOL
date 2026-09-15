@@ -47,7 +47,7 @@ export function ExecutionNavigator(props: Props) {
       title={`${item.code} — ${item.title}\n${resultLabels[item.result]} · ${users.find(user => user.id === item.assigned_to)?.name ?? "Nepřiřazeno"}`}
       className={`execution-case-row ${selectedId === item.id ? "is-selected" : ""}`}>
       <span className={`shrink-0 font-bold ${resultColors[item.result]}`} aria-label={resultLabels[item.result]}>{resultSymbols[item.result]}</span>
-      <span className="min-w-0"><span className="mr-1.5 font-semibold text-slate-700">{item.code}</span><span>{item.title}</span></span>
+      <span className="min-w-0"><span className="mr-1.5 font-semibold text-text">{item.code}</span><span>{item.title}</span></span>
     </button></li>;
   }
   function branch(key: string, name: string, ids: number[], active: boolean, select: () => void, children: () => ReactNode) {
@@ -56,7 +56,7 @@ export function ExecutionNavigator(props: Props) {
     const open = searching || expanded.has(key);
     const done = ids.filter(id => byCase.get(id)?.result !== "not_run" && byCase.has(id)).length;
     return <li key={key} className="min-w-0">
-      <div className={`flex items-center rounded ${active ? "bg-cyan-100" : "hover:bg-slate-50"}`}>
+      <div className={`flex items-center rounded ${active ? "bg-selected-bg" : "hover:bg-surface-muted"}`}>
         <button type="button" aria-label={`${open ? "Sbalit" : "Rozbalit"} ${name}`} aria-expanded={open}
           className="grid h-8 w-7 shrink-0 place-items-center" disabled={searching}
           onClick={() => setExpanded(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })}>
@@ -64,10 +64,10 @@ export function ExecutionNavigator(props: Props) {
         </button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left text-xs" onClick={select} aria-pressed={active} title={name}>
           <span className="min-w-0 flex-1 truncate font-semibold">{name}</span>
-          <span className="shrink-0 text-slate-500" title={`${done} dokončeno z ${ids.length}; ${matched.length} odpovídá filtru`}>{done}/{ids.length}</span>
+          <span className="shrink-0 text-muted" title={`${done} dokončeno z ${ids.length}; ${matched.length} odpovídá filtru`}>{done}/{ids.length}</span>
         </button>
       </div>
-      {open && <ul className="ml-3 border-l border-slate-200 pl-1">{children()}</ul>}
+      {open && <ul className="ml-3 border-l border-border pl-1">{children()}</ul>}
     </li>;
   }
   function suiteRow(suite: SelectionSuite, path: string) {
@@ -91,7 +91,7 @@ export function ExecutionNavigator(props: Props) {
           const item = groups.get(child.group_id);
           return item ? groupRow(item, nextPath, child.include_descendants) : null;
         })}
-        {!expandChildren && <li className="p-1 text-xs text-slate-500">Bez dalších potomků v tomto umístění.</li>}
+        {!expandChildren && <li className="p-1 text-xs text-muted">Bez dalších potomků v tomto umístění.</li>}
       </>);
   }
   const grouped = new Set(navigation.groups.flatMap(group => group.case_ids));
@@ -99,38 +99,38 @@ export function ExecutionNavigator(props: Props) {
   const ungrouped = filteredCases.filter(item => !grouped.has(item.test_case_id));
   const unknownSuite = filteredCases.filter(item => !inSuite.has(item.test_case_id));
   return <aside className="execution-navigator" aria-label="Testy v provedení">
-    <div className="space-y-2 border-b border-slate-200 p-3">
-      <div className="relative"><Search size={15} className="absolute left-2.5 top-2.5 text-slate-400" />
+    <div className="space-y-2 border-b border-border p-3">
+      <div className="relative"><Search size={15} className="absolute left-2.5 top-2.5 text-subtle" />
         <input type="search" aria-label="Hledat skupinu, suitu nebo test v běhu" placeholder="Skupina, suita, kód nebo název…"
-          className="w-full rounded border border-slate-300 py-2 pl-8 pr-2 text-xs" value={filters.query} onChange={event => onFilters({ ...filters, query: event.target.value })} />
+          className="w-full rounded border border-control py-2 pl-8 pr-2 text-xs" value={filters.query} onChange={event => onFilters({ ...filters, query: event.target.value })} />
       </div>
       <div className="flex gap-1" aria-label="Zobrazení testů">
         {([["groups", "Skupiny"], ["suites", "Suity"], ["cases", "Testy"]] as const).map(([value, label]) =>
-          <button type="button" key={value} aria-pressed={tab === value} className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${tab === value ? "bg-cyan-700 text-white" : "bg-slate-100"}`} onClick={() => setTab(value)}>{label}</button>)}
+          <button type="button" key={value} aria-pressed={tab === value} className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${tab === value ? "bg-accent text-on-accent" : "bg-surface-muted"}`} onClick={() => setTab(value)}>{label}</button>)}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
-        <select aria-label="Filtrovat podle výsledku" value={filters.result} className="min-w-0 rounded border border-slate-200 p-1.5 text-xs" onChange={event => onFilters({ ...filters, result: event.target.value as ExecutionFilters["result"] })}>
+        <select aria-label="Filtrovat podle výsledku" value={filters.result} className="min-w-0 rounded border border-control p-1.5 text-xs" onChange={event => onFilters({ ...filters, result: event.target.value as ExecutionFilters["result"] })}>
           <option value="">Všechny výsledky</option>{Object.entries(resultLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
-        <select aria-label="Filtrovat podle testera" value={filters.tester} className="min-w-0 rounded border border-slate-200 p-1.5 text-xs" onChange={event => onFilters({ ...filters, tester: event.target.value })}>
+        <select aria-label="Filtrovat podle testera" value={filters.tester} className="min-w-0 rounded border border-control p-1.5 text-xs" onChange={event => onFilters({ ...filters, tester: event.target.value })}>
           <option value="">Všichni testeři</option><option value="unassigned">Nepřiřazeno</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
         </select>
       </div>
-      {filters.scope && <button type="button" className="flex w-full items-center justify-between gap-2 rounded bg-cyan-50 p-1.5 text-left text-xs text-cyan-800" onClick={() => onFilters({ ...filters, scope: null })} title="Zrušit omezení na skupinu nebo suitu">
+      {filters.scope && <button type="button" className="flex w-full items-center justify-between gap-2 rounded bg-selected-bg p-1.5 text-left text-xs text-link" onClick={() => onFilters({ ...filters, scope: null })} title="Zrušit omezení na skupinu nebo suitu">
         <span className="truncate">{filters.scope.name}{filters.scope.includeDescendants === false ? " · bez potomků" : ""}</span><X size={14} className="shrink-0" />
       </button>}
-      <p className="text-[11px] text-slate-500">Aktuální struktura repository</p>
+      <p className="text-[11px] text-muted">Aktuální struktura repository</p>
     </div>
     <div className="execution-navigation-scroll p-2">
       <ul>
-        {tab === "groups" && <>{roots.map(group => groupRow(group))}{ungrouped.length > 0 && <li><div className="px-2 py-2 text-xs font-semibold text-slate-500">Bez skupiny</div><ul>{ungrouped.map(item => caseRow(item.test_case_id))}</ul></li>}</>}
-        {tab === "suites" && <>{navigation.suites.map(suite => suiteRow(suite, "suites"))}{unknownSuite.length > 0 && <li><div className="px-2 py-2 text-xs text-slate-500">Zařazení není dostupné</div><ul>{unknownSuite.map(item => caseRow(item.test_case_id))}</ul></li>}</>}
+        {tab === "groups" && <>{roots.map(group => groupRow(group))}{ungrouped.length > 0 && <li><div className="px-2 py-2 text-xs font-semibold text-muted">Bez skupiny</div><ul>{ungrouped.map(item => caseRow(item.test_case_id))}</ul></li>}</>}
+        {tab === "suites" && <>{navigation.suites.map(suite => suiteRow(suite, "suites"))}{unknownSuite.length > 0 && <li><div className="px-2 py-2 text-xs text-muted">Zařazení není dostupné</div><ul>{unknownSuite.map(item => caseRow(item.test_case_id))}</ul></li>}</>}
         {tab === "cases" && filteredCases.map(item => caseRow(item.test_case_id))}
       </ul>
-      {!filteredCases.length && <p className="p-3 text-sm text-slate-500">Filtru neodpovídá žádný test.</p>}
+      {!filteredCases.length && <p className="p-3 text-sm text-muted">Filtru neodpovídá žádný test.</p>}
     </div>
-    <div className="space-y-2 border-t border-slate-200 p-2 text-xs">
-      <p role="status" className="text-slate-500">Zobrazeno {filteredCases.length} z {cases.length} testů</p>
+    <div className="space-y-2 border-t border-border p-2 text-xs">
+      <p role="status" className="text-muted">Zobrazeno {filteredCases.length} z {cases.length} testů</p>
       <button type="button" className="workspace-button w-full" disabled={!props.hasNext || busy} onClick={props.onNext}>Další neprovedený ve filtru</button>
     </div>
   </aside>;

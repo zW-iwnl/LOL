@@ -8,9 +8,7 @@ export const resultLabels: Record<TestRunCaseResult, string> = {
 export const resultSymbols: Record<TestRunCaseResult, string> = {
   not_run: "○", passed: "✓", failed: "✕", blocked: "⊘", skipped: "–",
 };
-export const resultColors: Record<TestRunCaseResult, string> = {
-  not_run: "text-slate-500", passed: "text-emerald-700", failed: "text-rose-700", blocked: "text-amber-700", skipped: "text-slate-600",
-};
+export { resultTextClasses as resultColors } from "../../data/resultStyles";
 export const runStatusLabels = { open: "Otevřený", in_progress: "Probíhá", completed: "Dokončený", archived: "Archivovaný" };
 export type SnapshotStep = {
   id: number; step_order: number; action: string; step_type?: TestStepType;

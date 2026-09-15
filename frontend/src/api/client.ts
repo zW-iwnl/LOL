@@ -240,7 +240,8 @@ export type AddTestCasesPayload = {
 };
 
 export function getStoredToken() {
-  return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  try { return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY); }
+  catch { return null; }
 }
 
 export function storeToken(token: string) {

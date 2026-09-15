@@ -51,6 +51,6 @@ export function VirtualList<T>({ items, itemKey, render, rowHeight = 36, label, 
         {render(item, start + relativeIndex)}
       </div>)}
     </div>
-    {!items.length && <p className="p-3 text-sm text-slate-500">Žádné odpovídající položky.</p>}
+    {!items.length && <p className="p-3 text-sm text-muted">Žádné odpovídající položky.</p>}
   </div>;
 }

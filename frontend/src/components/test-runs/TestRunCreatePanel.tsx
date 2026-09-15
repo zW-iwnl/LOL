@@ -11,7 +11,7 @@ type Props = {
   onCancel: () => void;
   onCreated: (run: TestRun) => void;
 };
-const inputClass = "mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm";
+const inputClass = "mt-1 w-full rounded-md border border-border px-3 py-2 text-sm";
 const emptySelection: RunSelection = { groups: [], suite_ids: [], test_case_ids: [] };
 
 export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
@@ -97,7 +97,7 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
       setSaving(false);
     }
   }
-  return <section ref={panel} id="test-run-create" aria-labelledby="test-run-create-title" className="scroll-mt-4 rounded-lg border border-cyan-200 bg-white p-5 shadow-sm">
+  return <section ref={panel} id="test-run-create" aria-labelledby="test-run-create-title" className="scroll-mt-4 rounded-lg border border-focus bg-surface p-5 shadow-sm shadow-shadow">
     <h2 id="test-run-create-title" className="text-lg font-semibold">Nový test run</h2>
     <form className="mt-4 space-y-5" noValidate onSubmit={(event) => void submit(event)}>
       <fieldset disabled={saving} className="space-y-5 disabled:opacity-70">
@@ -107,15 +107,15 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
           <label className="text-sm font-medium">Termín<input type="datetime-local" className={inputClass} value={form.planned_end} onChange={(event) => changeField("planned_end", event.target.value)} /></label>
           <label className="text-sm font-medium md:col-span-2">Popis<textarea rows={3} className={inputClass} value={form.description} onChange={(event) => changeField("description", event.target.value)} /></label>
         </div>
-        {catalogLoading && <p role="status" className="text-sm text-slate-500">Načítám nabídku skupin a suit…</p>}
-        {catalogError && <p role="alert" className="text-sm text-rose-700">{catalogError}</p>}
+        {catalogLoading && <p role="status" className="text-sm text-muted">Načítám nabídku skupin a suit…</p>}
+        {catalogError && <p role="alert" className="text-sm text-danger">{catalogError}</p>}
         {catalog && <>
           <RunRepositoryPicker catalog={catalog} selection={selection} onChange={setSelection} />
           <RunSelectionSummary catalog={catalog} selection={selection} preview={currentPreview} onChange={setSelection} />
         </>}
-        {previewError && <p role="alert" className="text-sm text-rose-700">{previewError}</p>}
-        <button type="button" className="rounded-md border border-slate-200 px-3 py-2 text-sm" onClick={refreshPreview}>Obnovit nabídku a náhled</button>
-        <details className="rounded-md border border-slate-200 p-4">
+        {previewError && <p role="alert" className="text-sm text-danger">{previewError}</p>}
+        <button type="button" className="rounded-md border border-border px-3 py-2 text-sm" onClick={refreshPreview}>Obnovit nabídku a náhled</button>
+        <details className="rounded-md border border-border p-4">
           <summary className="cursor-pointer text-sm font-medium">Další nastavení</summary>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <label className="text-sm">Tester<select aria-label="Tester" className={inputClass} value={form.assigned_to} onChange={(event) => changeField("assigned_to", event.target.value)}>
@@ -130,8 +130,8 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
           </div>
         </details>
       </fieldset>
-      {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-      {confirmCancel && <div className="flex flex-wrap items-center gap-3 rounded-md bg-amber-50 p-3 text-sm">
+      {error && <p role="alert" className="rounded-md bg-danger-bg p-3 text-sm text-danger">{error}</p>}
+      {confirmCancel && <div className="flex flex-wrap items-center gap-3 rounded-md bg-warning-bg p-3 text-sm">
         Zahodit rozepsaný formulář?
         <button type="button" disabled={saving} onClick={onCancel} className="underline">Zahodit změny</button>
         <button type="button" disabled={saving} onClick={() => setConfirmCancel(false)} className="underline">Pokračovat v úpravách</button>
@@ -141,8 +141,8 @@ export function TestRunCreatePanel({ users, onCancel, onCreated }: Props) {
           const dirty = form.name || form.task_number || form.description || form.planned_end || form.planned_start || form.version || form.assigned_to
             || form.environment !== "TEST" || form.status !== "open" || selectionKey !== JSON.stringify(emptySelection);
           if (dirty) setConfirmCancel(true); else onCancel();
-        }} className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:opacity-50">Zrušit</button>
-        <button type="submit" disabled={saving} className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        }} className="rounded-md border border-border px-4 py-2 text-sm disabled:opacity-50">Zrušit</button>
+        <button type="submit" disabled={saving} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent disabled:opacity-50">
           {saving ? "Vytvářím…" : "Vytvořit test run"}
         </button>
       </div>

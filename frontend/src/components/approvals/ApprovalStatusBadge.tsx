@@ -5,5 +5,5 @@ export const approvalLabels: Record<string, string> = {
   legacy_snapshot_missing: "Historický snapshot chybí", open: "Rozpracováno", submitted: "Odesláno", closed: "Uzavřeno",
 };
 export function ApprovalStatusBadge({ state }: { state: string | null | undefined }) {
-  return <span className={`inline-block rounded-md px-2 py-1 text-xs ${state === "approved" ? "bg-emerald-50 text-emerald-800" : state === "rejected" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-900"}`}>{approvalLabels[state ?? "unknown"] ?? state}</span>;
+  return <span className={`inline-block rounded-md px-2 py-1 text-xs ${state === "approved" ? "bg-success-bg text-success" : state === "rejected" ? "bg-danger-bg text-danger" : "bg-warning-bg text-warning"}`}>{approvalLabels[state ?? "unknown"] ?? state}</span>;
 }

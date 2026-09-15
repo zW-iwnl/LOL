@@ -52,19 +52,19 @@ export function RepositoryCaseTable({ scope = {}, suites, tags, refreshKey = 0, 
           onChange={event => filter({ tagIds: event.target.checked ? [...(filters.tagIds ?? []), tag.id] : filters.tagIds?.filter(id => id !== tag.id) })} />{tag.name}</label>)}</div>
       </details>
     </div>
-    {!!filters.tagIds?.length && <div className="mb-2 flex flex-wrap gap-1">{filters.tagIds.map(id => <button type="button" key={id} className="rounded bg-cyan-50 px-2 py-1 text-xs text-cyan-800" onClick={() => filter({ tagIds: filters.tagIds!.filter(value => value !== id) })}>{tags.find(tag => tag.id === id)?.name ?? `#${id}`} ×</button>)}</div>}
-    {state.error && <p role="alert" className="p-3 text-sm text-rose-700">{state.error}<button className="ml-2 underline" onClick={() => setRetryKey(value => value + 1)}>Zkusit znovu</button></p>}
-    {state.loading && <p role="status" className="py-1 text-xs text-slate-500">Načítám obsah…</p>}
+    {!!filters.tagIds?.length && <div className="mb-2 flex flex-wrap gap-1">{filters.tagIds.map(id => <button type="button" key={id} className="rounded bg-selected-bg px-2 py-1 text-xs text-link" onClick={() => filter({ tagIds: filters.tagIds!.filter(value => value !== id) })}>{tags.find(tag => tag.id === id)?.name ?? `#${id}`} ×</button>)}</div>}
+    {state.error && <p role="alert" className="p-3 text-sm text-danger">{state.error}<button className="ml-2 underline" onClick={() => setRetryKey(value => value + 1)}>Zkusit znovu</button></p>}
+    {state.loading && <p role="status" className="py-1 text-xs text-muted">Načítám obsah…</p>}
     <table className="repository-table" aria-busy={state.loading}>
       <thead><tr><th>Test case</th><th>Suita</th><th>Stav</th>{scope.groupId && <th>Původ</th>}<th><span className="sr-only">Akce</span></th></tr></thead>
       <tbody>{data?.items.map(item => <tr key={item.id}>
-        <td><button type="button" className="text-left hover:text-cyan-800" disabled={state.loading} onClick={() => actions.onOpen(item.id)}><strong className="mr-2 text-cyan-800">{item.code}</strong>{item.title}</button>
-          <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-500">{item.published_version ? <span>Publikováno v{item.published_version}</span> : <span>Dosud nepublikováno</span>}{item.review_id ? <Link className="text-cyan-800 underline" to={withReturn(`/test-case-approvals/${item.review_id}`, returnTo)}>v{item.review_version} čeká na schválení</Link> : item.draft_id ? <Link className="text-cyan-800 underline" to={withReturn(`/test-cases/${item.id}?tab=draft`, returnTo)}>Pokračovat v návrhu</Link> : null}</div>
-          {item.tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-500">{item.tags.map(tag => <span key={tag.id}>{tag.name}</span>)}</div>}
-          {item.automated && <span className="text-[10px] text-slate-500">Automatizovaný</span>}
+        <td><button type="button" className="text-left hover:text-link" disabled={state.loading} onClick={() => actions.onOpen(item.id)}><strong className="mr-2 text-link">{item.code}</strong>{item.title}</button>
+          <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted">{item.published_version ? <span>Publikováno v{item.published_version}</span> : <span>Dosud nepublikováno</span>}{item.review_id ? <Link className="text-link underline" to={withReturn(`/test-case-approvals/${item.review_id}`, returnTo)}>v{item.review_version} čeká na schválení</Link> : item.draft_id ? <Link className="text-link underline" to={withReturn(`/test-cases/${item.id}?tab=draft`, returnTo)}>Pokračovat v návrhu</Link> : null}</div>
+          {item.tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted">{item.tags.map(tag => <span key={tag.id}>{tag.name}</span>)}</div>}
+          {item.automated && <span className="text-[10px] text-muted">Automatizovaný</span>}
         </td>
-        <td className="text-slate-500">{item.suite_name}</td><td><span className={item.status === "ready" ? "text-emerald-700" : "text-slate-500"}>{caseStatusLabels[item.status]}</span></td>
-        {scope.groupId && <td><details className="text-xs"><summary className="cursor-pointer text-cyan-800">{item.origins.length} {item.origins.length === 1 ? "zdroj" : "zdrojů"}</summary><ul className="mt-1 space-y-1">{item.origins.map(origin => <li key={`${origin.group_id}:${origin.suite_id}`}>{origin.group_name} · {origin.suite_name ?? "Přímý odkaz"}</li>)}</ul></details></td>}
+        <td className="text-muted">{item.suite_name}</td><td><span className={item.status === "ready" ? "text-success" : "text-muted"}>{caseStatusLabels[item.status]}</span></td>
+        {scope.groupId && <td><details className="text-xs"><summary className="cursor-pointer text-link">{item.origins.length} {item.origins.length === 1 ? "zdroj" : "zdrojů"}</summary><ul className="mt-1 space-y-1">{item.origins.map(origin => <li key={`${origin.group_id}:${origin.suite_id}`}>{origin.group_name} · {origin.suite_name ?? "Přímý odkaz"}</li>)}</ul></details></td>}
         <td>{(actions.onDelete || actions.onMove || actions.onUnlink) && <ExecutionMenu label="Akce">
           <button type="button" disabled={state.loading} onClick={() => actions.onOpen(item.id)}>Otevřít test case</button>
           {actions.onMove && <button type="button" disabled={state.loading || actions.movingCaseId === item.id} onClick={() => { setMoveTarget(item); setSuiteTarget(String(item.suite_id)); setSuiteQuery(""); }}>Přesunout do suity</button>}
@@ -73,7 +73,7 @@ export function RepositoryCaseTable({ scope = {}, suites, tags, refreshKey = 0, 
         </ExecutionMenu>}</td>
       </tr>)}</tbody>
     </table>
-    {!state.loading && !state.error && !data?.items.length && <p className="p-3 text-sm text-slate-500">Filtrům neodpovídá žádný test case.</p>}
+    {!state.loading && !state.error && !data?.items.length && <p className="p-3 text-sm text-muted">Filtrům neodpovídá žádný test case.</p>}
     {data && <div className="repository-pagination"><span>Zobrazeno {data.total ? data.offset + 1 : 0}–{Math.min(data.offset + data.items.length, data.total)} z {data.total} · celkem v rozsahu {data.scope_total}</span>
       <div className="flex items-center gap-1"><select aria-label="Testů na stránku" className="workspace-input" value={filters.limit ?? 50} onChange={event => filter({ limit: Number(event.target.value) })}>{[25, 50, 100].map(n => <option key={n}>{n}</option>)}</select>
         <button type="button" className="workspace-button" aria-label="Předchozí stránka testů" disabled={state.loading || !data.offset} onClick={() => setFilters({ ...filters, offset: Math.max(0, data.offset - data.limit) })}>‹</button>

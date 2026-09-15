@@ -23,20 +23,20 @@ export function RunSelectionSummary({ catalog, selection, preview, onChange }: P
       remove: () => onChange({ ...selection, test_case_ids: selection.test_case_ids.filter((value) => value !== id) }),
     })),
   ];
-  return <section className="space-y-3 rounded-md bg-cyan-50 p-4" aria-label="Souhrn výběru">
+  return <section className="space-y-3 rounded-md bg-selected-bg p-4" aria-label="Souhrn výběru">
     <p className="text-sm font-medium" role="status">
       Skupiny: {selection.groups.length} · Suity: {selection.suite_ids.length} · Jednotlivé testy: {selection.test_case_ids.length}
       {preview ? ` → Unikátní schválené testy: ${preview.cases.length}` : " — náhled zatím není dostupný"}
     </p>
     <div className="flex max-h-36 flex-wrap gap-2 overflow-auto">
       {chips.map((chip) => <button key={chip.key} type="button" aria-label={`Odebrat ${chip.name}`} onClick={chip.remove}
-        className="rounded-md border border-cyan-200 bg-white px-2 py-1 text-xs">{chip.name} ×</button>)}
+        className="rounded-md border border-focus bg-surface px-2 py-1 text-xs">{chip.name} ×</button>)}
     </div>
     {preview && <details className="text-sm">
       <summary className="cursor-pointer">Zobrazit zařazené testy ({preview.cases.length})</summary>
       <ul className="mt-2 max-h-48 overflow-auto">{preview.cases.map((item) => <li key={item.id}>{item.code} — {item.title}</li>)}</ul>
     </details>}
-    {!!preview?.excluded_cases.length && <details className="text-sm text-amber-900">
+    {!!preview?.excluded_cases.length && <details className="text-sm text-warning">
       <summary className="cursor-pointer">Vynechané testy: {preview.excluded_cases.length} — zobrazit důvody</summary>
       <ul className="mt-2 max-h-48 overflow-auto">{preview.excluded_cases.map((item) => <li key={item.id}>
         {item.code} — {item.title}: {item.exclusion_reason}

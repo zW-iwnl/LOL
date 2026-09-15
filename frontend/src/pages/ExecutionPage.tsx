@@ -133,15 +133,15 @@ function ExecutionWorkspace({ runId }: { runId: number }) {
     {proposalMode && <RunCaseCreatePanel runId={run.id} caseId={proposalMode === "edit" ? item?.test_case_id : undefined} caseAttemptId={proposalMode === "edit" ? attempt?.id : undefined} onClose={() => setProposalMode(null)} onExecuted={() => void refreshAfterProposal()} />}
     {versionOpen && item && attempt && <RunVersionSelector caseId={item.test_case_id} attemptId={attempt.id} currentVersionId={attempt.test_case_version_id} onClose={() => setVersionOpen(false)} onExecuted={() => void refreshAfterProposal()} />}
     <div className="execution-run-toolbar">
-      <Link to={safeReturn(params.get("returnTo"), "/test-runs")} className="shrink-0 text-xs text-cyan-800">{params.has("returnTo") ? "← Zpět na předchozí práci" : "← Běhy"}</Link>
+      <Link to={safeReturn(params.get("returnTo"), "/test-runs")} className="shrink-0 text-xs text-link">{params.has("returnTo") ? "← Zpět na předchozí práci" : "← Běhy"}</Link>
       <h1 className="min-w-0 flex-1 truncate text-sm font-semibold" title={run.name}>{run.name}</h1>
-      <select aria-label="Provedení test runu" disabled={execution.busy} value={run.selected_attempt_id} className="max-w-48 rounded border border-slate-200 p-1.5 text-xs"
+      <select aria-label="Provedení test runu" disabled={execution.busy} value={run.selected_attempt_id} className="max-w-48 rounded border border-control p-1.5 text-xs"
         onChange={async event => { const id = Number(event.target.value); if (await execution.reload(id)) { setSelectedId(null); setCaseAttemptId(null); setNavigationMessage(null); } }}>
         {run.attempts.map(attempt => <option key={attempt.id} value={attempt.id}>Běh {attempt.attempt_number} · {runStatusLabels[attempt.status]}</option>)}
       </select>
-      <span className="text-xs text-slate-600">Hotovo {done}/{total}</span>
+      <span className="text-xs text-muted">Hotovo {done}/{total}</span>
       <ExecutionMenu label="Přehled a akce běhu">
-          <p className="px-2 py-1 text-xs text-slate-600">{run.environment ?? "Bez prostředí"} · {run.version ?? "Bez verze"}{run.task_number ? ` · ${run.task_number}` : ""}</p>
+          <p className="px-2 py-1 text-xs text-muted">{run.environment ?? "Bez prostředí"} · {run.version ?? "Bez verze"}{run.task_number ? ` · ${run.task_number}` : ""}</p>
           <p className="px-2 py-1 text-xs">Úspěšnost {done ? Math.round(passed / done * 100) : 0}% z vyhodnocených testů</p>
           <p className="px-2 py-1 text-xs">Definice: {run.definition_counts.approved ?? 0} schválených · {run.definition_counts.unapproved ?? 0} neschválených · {run.definition_counts.rejected ?? 0} zamítnutých · {run.definition_counts.unknown ?? 0} nedoložených</p>
           {runAttempt?.last_step_id && <button type="button" disabled={execution.busy} onClick={() => { if (runAttempt.last_test_run_case_id) { resumedAttempt.current = null; selectCase(runAttempt.last_test_run_case_id); setResumeKey(value => value + 1); } }}>Pokračovat od posledního kroku</button>}
@@ -150,24 +150,24 @@ function ExecutionWorkspace({ runId }: { runId: number }) {
           <button type="button" disabled={execution.busy || historicalRun || run.status === "archived"} onClick={() => void rerun(true)}>Spustit rerun</button>
       </ExecutionMenu>
     </div>
-    <div role="progressbar" aria-label="Průběh provedení" aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={done} className="h-1 shrink-0 overflow-hidden rounded bg-slate-200"><div className="h-full bg-cyan-600" style={{ width: `${total ? done / total * 100 : 0}%` }} /></div>
-    {execution.error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded bg-rose-50 p-2 text-sm text-rose-800">{execution.error}<button type="button" className="workspace-button" disabled={execution.busy} onClick={() => void execution.reload(run.selected_attempt_id)}>Obnovit data</button></div>}
-    {(historicalRun || historicalCase || run.status === "archived" || runAttempt?.status === "completed") && <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    <div role="progressbar" aria-label="Průběh provedení" aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={done} className="h-1 shrink-0 overflow-hidden rounded bg-track"><div className="h-full bg-accent" style={{ width: `${total ? done / total * 100 : 0}%` }} /></div>
+    {execution.error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded bg-danger-bg p-2 text-sm text-danger">{execution.error}<button type="button" className="workspace-button" disabled={execution.busy} onClick={() => void execution.reload(run.selected_attempt_id)}>Obnovit data</button></div>}
+    {(historicalRun || historicalCase || run.status === "archived" || runAttempt?.status === "completed") && <p className="rounded bg-warning-bg px-3 py-2 text-xs text-warning">
       {run.status === "archived" ? "Archivovaný běh" : historicalRun || historicalCase ? "Historické provedení" : "Dokončené provedení"} · pouze pro čtení.{canReset ? " Pro další testování vytvořte nový pokus." : ""}
     </p>}
     <div className="flex items-center gap-2 text-xs">
       <button type="button" className="workspace-button" aria-expanded={navigatorOpen} onClick={() => setNavigatorOpen(value => !value)}>{navigatorOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}{navigatorOpen ? "Skrýt testy" : "Zobrazit testy"}</button>
-      <label className="execution-width-control items-center gap-2 text-slate-500">Šířka navigace<input aria-label="Šířka navigace" type="range" min={260} max={400} step={10} value={navigatorWidth} onChange={event => setNavigatorWidth(Number(event.target.value))} className="w-20" /></label>
+      <label className="execution-width-control items-center gap-2 text-muted">Šířka navigace<input aria-label="Šířka navigace" type="range" min={260} max={400} step={10} value={navigatorWidth} onChange={event => setNavigatorWidth(Number(event.target.value))} className="w-20" /></label>
       {execution.loading && <span role="status">Obnovuji…</span>}
-      {Object.keys(draftState.drafts).length > 0 && <span className="ml-auto text-amber-800">Rozepsané výsledky: {Object.keys(draftState.drafts).length}</span>}
+      {Object.keys(draftState.drafts).length > 0 && <span className="ml-auto text-warning">Rozepsané výsledky: {Object.keys(draftState.drafts).length}</span>}
     </div>
     <div className={`execution-panels ${navigatorOpen ? "with-navigation" : ""}`} style={{ "--execution-navigation-width": `${navigatorWidth}px` } as CSSProperties}>
       {navigatorOpen && <ExecutionNavigator cases={run.test_run_cases} filteredCases={filteredCases} navigation={navigation} users={users} selectedId={item?.id} filters={filters} busy={execution.busy} onFilters={setFilters} onSelect={selectCase} onNext={() => next && selectCase(next.id)} hasNext={Boolean(next)} />}
       <section className="execution-detail" aria-label="Provedení vybraného testu" aria-busy={execution.busy}>
         {item && attempt ? <>
           <div className="execution-content-scroll" ref={contentRef}>
-            {!filteredCases.some(candidate => candidate.id === item.id) && <p className="bg-sky-50 px-3 py-2 text-xs text-sky-800">Vybraný test je mimo aktuální filtr. Jeho detail zůstává otevřený.</p>}
-            {(navigationMessage || !next && nextGlobal) && <div className="flex flex-wrap items-center gap-2 bg-slate-50 px-3 py-2 text-xs"><span>{navigationMessage ?? "Ve filtru není další neprovedený test."}</span>{nextGlobal && <button type="button" disabled={execution.busy} className="text-cyan-800 underline" onClick={() => { setFilters(emptyFilters); selectCase(nextGlobal.id); }}>Pokračovat v celém běhu</button>}</div>}
+            {!filteredCases.some(candidate => candidate.id === item.id) && <p className="bg-info-bg px-3 py-2 text-xs text-info">Vybraný test je mimo aktuální filtr. Jeho detail zůstává otevřený.</p>}
+            {(navigationMessage || !next && nextGlobal) && <div className="flex flex-wrap items-center gap-2 bg-surface-muted px-3 py-2 text-xs"><span>{navigationMessage ?? "Ve filtru není další neprovedený test."}</span>{nextGlobal && <button type="button" disabled={execution.busy} className="text-link underline" onClick={() => { setFilters(emptyFilters); selectCase(nextGlobal.id); }}>Pokračovat v celém běhu</button>}</div>}
             <ExecutionCaseHeader key={item.id} item={item} attempt={attempt} snapshot={snapshot} users={users} busy={execution.busy} canReset={canReset}
               onAttempt={id => { setSelectedId(item.id); setCaseAttemptId(id); }} onRerun={() => void rerun(false)} onProposal={() => openCaseAction(() => setProposalMode("edit"))} onVersion={() => openCaseAction(() => setVersionOpen(true))} />
             <ExecutionSteps steps={snapshot.steps} results={attempt.step_results} users={users} disabled={disabled} savingStepId={execution.savingStepId} onResult={(stepId, result) => void saveStep(stepId, result)} />

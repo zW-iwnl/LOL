@@ -52,14 +52,14 @@ export function MultiTagSelect({
   }
 
   return (
-    <fieldset className="rounded-md border border-slate-200 bg-white p-3">
+    <fieldset className="rounded-md border border-border bg-surface p-3">
       <legend className="px-1 text-sm font-medium">
         {label}{required ? " *" : ""}
       </legend>
       {selectedTags.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {selectedTags.map((tag) => (
-            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700" key={tag.id}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-selected-bg px-2 py-1 text-xs font-medium text-link" key={tag.id}>
               {tag.name}
               <button aria-label={`Odebrat tag ${tag.name}`} type="button" onClick={() => toggle(tag.id)}>
                 <X size={12} />
@@ -81,7 +81,7 @@ export function MultiTagSelect({
           aria-controls={optionsId}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="flex w-full items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm text-slate-500 hover:border-cyan-300"
+          className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-left text-sm text-muted hover:border-focus"
           type="button"
           onClick={() => setOpen((current) => !current)}
         >
@@ -90,13 +90,13 @@ export function MultiTagSelect({
           <ChevronDown className={`transition-transform ${open ? "rotate-180" : ""}`} size={14} />
         </button>
         {open && (
-          <div className="mt-2 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+          <div className="mt-2 rounded-md border border-border bg-surface p-2 shadow-lg shadow-shadow">
             <label className="relative block">
               <span className="sr-only">Hledat v {label.toLocaleLowerCase("cs")}</span>
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" size={14} />
               <input
                 autoFocus
-                className="w-full rounded-md border border-slate-200 py-2 pl-8 pr-3 text-sm"
+                className="w-full rounded-md border border-control py-2 pl-8 pr-3 text-sm"
                 placeholder="Hledat tag"
                 type="search"
                 value={query}
@@ -109,24 +109,24 @@ export function MultiTagSelect({
                 return (
                   <button
                     aria-pressed={selected}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-50"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-muted"
                     key={tag.id}
                     type="button"
                     onClick={() => toggle(tag.id)}
                   >
-                    <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selected ? "border-cyan-700 bg-cyan-700 text-white" : "border-slate-300"}`}>
+                    <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selected ? "border-focus bg-accent text-on-accent" : "border-control"}`}>
                       {selected && <Check size={12} />}
                     </span>
                     <span>{tag.name}</span>
                   </button>
                 );
               })}
-              {visibleTags.length === 0 && <p className="px-2 py-2 text-xs text-slate-500">Žádný odpovídající tag.</p>}
+              {visibleTags.length === 0 && <p className="px-2 py-2 text-xs text-muted">Žádný odpovídající tag.</p>}
             </div>
           </div>
         )}
       </div>
-      {required && values.length === 0 && <p className="mt-2 text-xs text-amber-700">Vyberte alespoň jeden tag.</p>}
+      {required && values.length === 0 && <p className="mt-2 text-xs text-warning">Vyberte alespoň jeden tag.</p>}
     </fieldset>
   );
 }
@@ -134,10 +134,10 @@ export function MultiTagSelect({
 export function TagChips({ label, values }: { label: string; values: string[] }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
+      <span className="text-muted">{label}</span>
       <span className="flex flex-wrap justify-end gap-1">
         {values.length > 0
-          ? values.map((value) => <span className="rounded-full bg-cyan-50 px-2 py-0.5 font-medium text-cyan-700" key={value}>{value}</span>)
+          ? values.map((value) => <span className="rounded-full bg-selected-bg px-2 py-0.5 font-medium text-link" key={value}>{value}</span>)
           : <span>-</span>}
       </span>
     </div>
@@ -157,7 +157,7 @@ export function TagSelect({ label, value, tags, onChange }: SelectProps) {
     <label className="block text-sm">
       <span className="font-medium">{label}</span>
       <select
-        className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2"
+        className="mt-1 w-full rounded-md border border-control bg-surface px-3 py-2"
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -174,7 +174,7 @@ export function TagFilter({ label, value, tags, onChange }: SelectProps) {
     <label className="block text-sm">
       <span className="font-medium">{label}</span>
       <select
-        className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2"
+        className="mt-1 w-full rounded-md border border-control bg-surface px-3 py-2"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -188,8 +188,8 @@ export function TagFilter({ label, value, tags, onChange }: SelectProps) {
 export function TagRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className="rounded-full bg-cyan-50 px-2 py-0.5 font-medium text-cyan-700">{value ?? "-"}</span>
+      <span className="text-muted">{label}</span>
+      <span className="rounded-full bg-selected-bg px-2 py-0.5 font-medium text-link">{value ?? "-"}</span>
     </div>
   );
 }

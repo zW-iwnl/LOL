@@ -108,7 +108,7 @@ type Props = {
   onSubmit: (event: FormEvent) => void;
 };
 
-const fieldClassName = "mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm";
+const fieldClassName = "mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm";
 
 export function TestCaseCreatePanel({
   form,
@@ -150,22 +150,22 @@ export function TestCaseCreatePanel({
   return (
     <section
       aria-labelledby="test-case-create-title"
-      className="scroll-mt-24 overflow-hidden rounded-lg border border-cyan-200 bg-white shadow-sm"
+      className="scroll-mt-24 overflow-hidden rounded-lg border border-focus bg-surface shadow-sm shadow-shadow"
       id="test-case-create-editor"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-cyan-100 bg-cyan-50/70 px-4 py-4 sm:px-6">
+      <div className="flex items-start justify-between gap-4 border-b border-focus bg-selected-bg/70 px-4 py-4 sm:px-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Nový záznam</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-900" id="test-case-create-title">
+          <p className="text-xs font-semibold uppercase tracking-wide text-link">Nový záznam</p>
+          <h2 className="mt-1 text-xl font-semibold text-text" id="test-case-create-title">
             Nový test case
           </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
             Vyplňte základní údaje a přidejte kroky v pořadí, ve kterém je tester provede.
           </p>
         </div>
         <button
           aria-label="Zavřít formulář nového test case"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-slate-600 hover:bg-white"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted hover:bg-surface"
           disabled={saving}
           type="button"
           onClick={onClose}
@@ -177,15 +177,15 @@ export function TestCaseCreatePanel({
       <form onSubmit={(event) => void onSubmit(event)}>
         <div className="space-y-6 p-4 sm:p-6">
           {error && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert">
+            <div className="rounded-md border border-danger-border bg-danger-bg p-3 text-sm text-danger" role="alert">
               {error}
             </div>
           )}
 
           <section aria-labelledby="case-basic-information" className="space-y-4">
             <div>
-              <h3 className="font-semibold text-slate-900" id="case-basic-information">Základní údaje</h3>
-              <p className="mt-1 text-sm text-slate-500">Povinná pole jsou označená hvězdičkou.</p>
+              <h3 className="font-semibold text-text" id="case-basic-information">Základní údaje</h3>
+              <p className="mt-1 text-sm text-muted">Povinná pole jsou označená hvězdičkou.</p>
             </div>
             <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.7fr)_minmax(160px,0.45fr)_minmax(280px,1.4fr)]">
               <label className="block text-sm">
@@ -252,7 +252,7 @@ export function TestCaseCreatePanel({
                   <option value="draft">Návrh ke schválení</option>
                 </select>
               </label>
-              <label className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm lg:mt-6">
+              <label className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm lg:mt-6">
                 <span className="font-medium">Automatizovaný</span>
                 <input
                   checked={form.automated}
@@ -264,16 +264,16 @@ export function TestCaseCreatePanel({
             </div>
           </section>
 
-          <section aria-labelledby="case-steps-title" className="space-y-4 border-t border-slate-200 pt-6">
+          <section aria-labelledby="case-steps-title" className="space-y-4 border-t border-border pt-6">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
               <div>
-                <h3 className="font-semibold text-slate-900" id="case-steps-title">Testovací kroky</h3>
-                <p className="mt-1 text-sm text-slate-500">
+                <h3 className="font-semibold text-text" id="case-steps-title">Testovací kroky</h3>
+                <p className="mt-1 text-sm text-muted">
                   Pořadí se ukládá automaticky. Prázdný krok se při uložení přeskočí.
                 </p>
               </div>
               <button
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-cyan-200 bg-white px-4 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-50"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-focus bg-surface px-4 py-2 text-sm font-medium text-link hover:bg-selected-bg"
                 disabled={saving}
                 type="button"
                 onClick={addStep}
@@ -284,17 +284,17 @@ export function TestCaseCreatePanel({
 
             <div className="space-y-3">
               {form.steps.map((step, index) => (
-                <article className="rounded-lg border border-slate-200 bg-slate-50/60 p-4" key={step.key}>
+                <article className="rounded-lg border border-border bg-surface-muted/60 p-4" key={step.key}>
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <span className="grid h-8 min-w-8 place-items-center rounded-full bg-cyan-700 px-2 text-sm font-semibold text-white" aria-hidden="true">
+                      <span className="grid h-8 min-w-8 place-items-center rounded-full bg-accent px-2 text-sm font-semibold text-on-accent" aria-hidden="true">
                         {index + 1}
                       </span>
                       <label className="flex items-center gap-2 text-sm">
                         <span className="font-medium">Typ kroku</span>
                         <select
                           aria-label={`Typ kroku ${index + 1}`}
-                          className="rounded-md border border-slate-200 bg-white px-3 py-2"
+                          className="rounded-md border border-control bg-surface px-3 py-2"
                           value={step.stepType}
                           onChange={(event) => updateStep(step.key, {
                             stepType: event.target.value as TestStepType,
@@ -309,7 +309,7 @@ export function TestCaseCreatePanel({
                     <div className="flex items-center gap-1">
                       <button
                         aria-label={`Posunout krok ${index + 1} nahoru`}
-                        className="grid h-11 w-11 place-items-center rounded-md text-slate-600 hover:bg-white disabled:opacity-30"
+                        className="grid h-11 w-11 place-items-center rounded-md text-muted hover:bg-surface disabled:opacity-30"
                         disabled={saving || index === 0}
                         title="Posunout nahoru"
                         type="button"
@@ -319,7 +319,7 @@ export function TestCaseCreatePanel({
                       </button>
                       <button
                         aria-label={`Posunout krok ${index + 1} dolů`}
-                        className="grid h-11 w-11 place-items-center rounded-md text-slate-600 hover:bg-white disabled:opacity-30"
+                        className="grid h-11 w-11 place-items-center rounded-md text-muted hover:bg-surface disabled:opacity-30"
                         disabled={saving || index === form.steps.length - 1}
                         title="Posunout dolů"
                         type="button"
@@ -329,7 +329,7 @@ export function TestCaseCreatePanel({
                       </button>
                       <button
                         aria-label={`Odebrat krok ${index + 1}`}
-                        className="grid h-11 w-11 place-items-center rounded-md text-rose-700 hover:bg-rose-50 disabled:opacity-30"
+                        className="grid h-11 w-11 place-items-center rounded-md text-danger hover:bg-danger-bg disabled:opacity-30"
                         disabled={saving}
                         title="Odebrat krok"
                         type="button"
@@ -388,10 +388,10 @@ export function TestCaseCreatePanel({
                 </article>
               ))}
               {form.steps.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center">
-                  <p className="text-sm text-slate-600">Test case zatím nemá žádný krok.</p>
+                <div className="rounded-lg border border-dashed border-control p-6 text-center">
+                  <p className="text-sm text-muted">Test case zatím nemá žádný krok.</p>
                   <button
-                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-cyan-200 px-4 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-50"
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-focus px-4 py-2 text-sm font-medium text-link hover:bg-selected-bg"
                     type="button"
                     onClick={addStep}
                   >
@@ -403,9 +403,9 @@ export function TestCaseCreatePanel({
           </section>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+        <div className="flex flex-col-reverse gap-2 border-t border-border bg-surface-muted px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
           <button
-            className="min-h-11 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="min-h-11 rounded-md border border-control bg-surface px-5 py-2 text-sm font-medium text-text hover:bg-surface-muted disabled:opacity-50"
             disabled={saving}
             type="button"
             onClick={onClose}
@@ -413,7 +413,7 @@ export function TestCaseCreatePanel({
             Zrušit
           </button>
           <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-cyan-700 px-5 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-5 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
             disabled={saving}
             type="submit"
           >

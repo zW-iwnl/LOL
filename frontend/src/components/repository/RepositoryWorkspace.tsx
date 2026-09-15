@@ -23,7 +23,7 @@ export function RepositoryWorkspace(props: Props) {
         className={`workspace-button ${props.activeTab === tab.id ? "workspace-active-tab" : ""}`} onClick={() => props.onTabChange(tab.id)} onKeyDown={event => {
           const next = event.key === "ArrowRight" ? (i + 1) % tabs.length : event.key === "ArrowLeft" ? (i + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
           if (next === null) return; event.preventDefault(); props.onTabChange(tabs[next].id); document.getElementById(`repository-tab-${tabs[next].id}`)?.focus();
-        }}>{tab.label} <span className="text-slate-500">{tab.count}</span></button>)}
+        }}>{tab.label} <span className="text-muted">{tab.count}</span></button>)}
     </nav>
     <div role="tabpanel" id="repository-panel" aria-labelledby={`repository-tab-${props.activeTab}`} className="repository-tab-panel">
       {props.activeTab === "groups" && <RepositoryGroupsView groups={props.groups} suites={props.suites} tags={props.tags} selectedGroupId={props.selectedGroupId} onSelectedGroupChange={props.onSelectedGroupChange} onChanged={props.onChanged} onOpenCase={props.onOpen} onOpenSuite={props.onSelectedSuiteChange} />}

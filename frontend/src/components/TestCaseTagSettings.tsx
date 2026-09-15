@@ -85,47 +85,47 @@ export function TestCaseTagSettings() {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Vlastnosti test case</h2>
-        <p className="mt-1 text-sm text-slate-500">Správa hodnot zobrazovaných v comboboxech nového test case.</p>
+        <p className="mt-1 text-sm text-muted">Správa hodnot zobrazovaných v comboboxech nového test case.</p>
       </div>
       {error ? <ErrorState message={error} /> : null}
-      {message ? <div aria-live="polite" className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700" role="status">{message}</div> : null}
+      {message ? <div aria-live="polite" className="rounded-md border border-success-border bg-success-bg p-3 text-sm text-success" role="status">{message}</div> : null}
       <div className="grid gap-5 xl:grid-cols-3">
         {categories.map((category) => {
           const tags = (tagsState.data ?? []).filter((tag) => tag.category === category.key);
           return (
-            <section key={category.key} className="rounded-md border border-slate-200 bg-white">
-              <div className="border-b border-slate-200 px-4 py-3 font-semibold">{category.label}</div>
-              <div className="divide-y divide-slate-100">
+            <section key={category.key} className="rounded-md border border-border bg-surface">
+              <div className="border-b border-border px-4 py-3 font-semibold">{category.label}</div>
+              <div className="divide-y divide-border">
                 {tags.map((tag) => (
                   <div key={tag.id} className="flex items-center gap-2 p-3">
-                    <span className="min-w-8 rounded-full bg-slate-100 px-2 py-1 text-center text-xs text-slate-600" title="Počet použití">
+                    <span className="min-w-8 rounded-full bg-surface-muted px-2 py-1 text-center text-xs text-muted" title="Počet použití">
                       {tag.usage_count}
                     </span>
                     <input
                       aria-label={`Název položky ${tag.name}`}
-                      className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                      className="min-w-0 flex-1 rounded-md border border-control px-3 py-2 text-sm"
                       value={names[tag.id] ?? tag.name}
                       onChange={(event) => setNames((current) => ({ ...current, [tag.id]: event.target.value }))}
                     />
-                    <button aria-label={`Uložit změnu ${tag.name}`} className="grid h-11 w-11 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50" type="button" title="Uložit změnu" onClick={() => void renameTag(tag)}>
+                    <button aria-label={`Uložit změnu ${tag.name}`} className="grid h-11 w-11 place-items-center rounded-md border border-border text-muted hover:bg-surface-muted" type="button" title="Uložit změnu" onClick={() => void renameTag(tag)}>
                       <Save size={16} />
                     </button>
-                    <button aria-label={`Odstranit položku ${tag.name}`} className="grid h-11 w-11 place-items-center rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50" type="button" title="Odstranit položku" onClick={() => void removeTag(tag)}>
+                    <button aria-label={`Odstranit položku ${tag.name}`} className="grid h-11 w-11 place-items-center rounded-md border border-danger-border text-danger hover:bg-danger-bg" type="button" title="Odstranit položku" onClick={() => void removeTag(tag)}>
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
-                {tags.length === 0 ? <div className="p-4 text-sm text-slate-500">Číselník je prázdný.</div> : null}
+                {tags.length === 0 ? <div className="p-4 text-sm text-muted">Číselník je prázdný.</div> : null}
               </div>
-              <form className="flex gap-2 border-t border-slate-200 p-3" onSubmit={(event) => void addTag(event, category.key)}>
+              <form className="flex gap-2 border-t border-border p-3" onSubmit={(event) => void addTag(event, category.key)}>
                 <input
                   aria-label={`Nová položka pro ${category.label}`}
-                  className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  className="min-w-0 flex-1 rounded-md border border-control px-3 py-2 text-sm"
                   placeholder="Nová položka"
                   value={newNames[category.key]}
                   onChange={(event) => setNewNames((current) => ({ ...current, [category.key]: event.target.value }))}
                 />
-                <button className="inline-flex min-h-11 items-center gap-1 rounded-md bg-cyan-700 px-3 py-2 text-sm font-medium text-white" type="submit">
+                <button className="inline-flex min-h-11 items-center gap-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent" type="submit">
                   <Plus size={16} /> Přidat
                 </button>
               </form>
