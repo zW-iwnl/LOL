@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Implementace schvalování a verzování – stav lokálního nasazení
 
 ## Stav

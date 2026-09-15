@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Database & Table Optimization Audit
 
 > Audit zachycuje schéma před migrací 0014. Aktuální model bez tabulky projects popisuje [Databázový model](database-model.md).

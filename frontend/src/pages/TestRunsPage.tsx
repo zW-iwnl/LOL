@@ -1,11 +1,15 @@
 import { Archive, Eye, Pencil, PlayCircle, Plus, Search, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { getTestCases } from "../api/testCases";
+import { getRepositoryCases, type RepositoryCase } from "../api/repositoryWorkspace";
+import { Pagination } from "../components/workspace/Workspace";
+import { withReturn } from "../components/workspace/navigation";
+import { useDebounced } from "../components/workspace/useDebounced";
+import { useRepositoryPreference } from "../components/repository/useRepositoryPreference";
 import {
   addCasesToTestRun,
   archiveTestRun,
-  getTestRuns,
+  getTestRunPage,
   removeTestRunCase,
   updateTestRunCase,
   updateTestRun,
@@ -15,7 +19,7 @@ import {
   type TestRunCreatePayload,
   type TestRunStatus,
 } from "../api/testRuns";
-import { getUsers, type TestCase } from "../api/client";
+import { getUsers } from "../api/client";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { TestRunCreatePanel } from "../components/test-runs/TestRunCreatePanel";
 import { PageHeader } from "../components/PageHeader";
@@ -160,7 +164,7 @@ function CasePickerFilters({ query, status, onQueryChange, onStatusChange }: Cas
 }
 
 type CasePickerListProps = {
-  testCases: TestCase[];
+  testCases: RepositoryCase[];
   selectedCaseIds: number[];
   onToggle: (testCaseId: number) => void;
   emptyText?: string;
@@ -193,14 +197,15 @@ export function TestRunsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const shouldOpenCreate = searchParams.get("new") === "1" || (location.state as { openCreateRun?: boolean } | null)?.openCreateRun === true;
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TestRunStatus | "">("");
-  const [environmentFilter, setEnvironmentFilter] = useState("");
+  const [query, setQuery] = useRepositoryPreference("runsQuery", "");
+  const [statusFilter, setStatusFilter] = useRepositoryPreference<TestRunStatus | "">("runsStatus", "");
+  const [environmentFilter, setEnvironmentFilter] = useRepositoryPreference("runsEnvironment", "");
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalMode, setModalMode] = useState<ModalMode | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdRun, setCreatedRun] = useState<TestRun | null>(null);
   const [selectedRun, setSelectedRun] = useState<TestRun | TestRunListItem | null>(null);
+  const [rememberedRun, setRememberedRun] = useRepositoryPreference<number | null>("selectedRun", null);
   const [form, setForm] = useState<TestRunFormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -210,39 +215,35 @@ export function TestRunsPage() {
   const [caseQuery, setCaseQuery] = useState("");
   const [caseStatusFilter, setCaseStatusFilter] = useState("");
 
-  const runsState = useApiResource(
-    () => getTestRuns({ q: query, status: statusFilter, environment: environmentFilter, limit: 100, offset: 0 }),
-    [query, statusFilter, environmentFilter, refreshKey],
-  );
-  const allRunsState = useApiResource(
-    () => getTestRuns({ limit: 100, offset: 0 }),
-    [refreshKey],
-  );
-  const casesState = useApiResource(() => getTestCases(), [refreshKey]);
+  const [offset, setOffset] = useRepositoryPreference("runsOffset", 0);
+  const [limit, setLimit] = useRepositoryPreference("runsLimit", 50);
+  const [caseOffset, setCaseOffset] = useState(0); const caseSearch = useDebounced(caseQuery); const runSearch = useDebounced(query);
+  const runsState = useApiResource(() => getTestRunPage({ q: runSearch, status: statusFilter, environment: environmentFilter, offset, limit }), [runSearch, statusFilter, environmentFilter, offset, limit, refreshKey]);
+  const casesState = useApiResource(() => modalMode === "detail" && selectedRun ? getRepositoryCases({ query: caseSearch, eligibleOnly: true, excludeRunId: selectedRun.id, offset: caseOffset, limit: 50 }) : Promise.resolve(null), [modalMode, selectedRun?.id, caseSearch, caseOffset, refreshKey]);
+  useEffect(() => { setCaseOffset(0); }, [caseSearch]);
+  useEffect(() => { if (runsState.data && !runsState.loading && offset > 0 && offset >= runsState.data.total) setOffset(Math.max(0, Math.ceil(runsState.data.total / limit) - 1) * limit); }, [runsState.data, runsState.loading, offset, limit]);
   const usersState = useApiResource(getUsers, [refreshKey]);
 
-  const runs = runsState.data ?? [];
-  const allRuns = allRunsState.data ?? [];
-  const testCases = casesState.data ?? [];
+  const runs = runsState.data?.items ?? [];
+  const testCases = casesState.data?.items ?? [];
   const users = usersState.data ?? [];
+
+  useEffect(() => {
+    if (!selectedRun && rememberedRun && !shouldOpenCreate && !runsState.loading) {
+      const remembered = runs.find(run => run.id === rememberedRun);
+      if (remembered) { setSelectedRun(remembered); setForm(toForm(remembered)); setModalMode("detail"); }
+    }
+  }, [runsState.data, runsState.loading, rememberedRun]);
 
   const selectedRunLatest = useMemo(
     () => (selectedRun ? runs.find((run) => run.id === selectedRun.id) ?? selectedRun : null),
     [runs, selectedRun],
   );
 
-  const kpis = useMemo(() => {
-    const passRates = allRuns.map((run) => resultSummary(run.test_run_cases).passRate).filter((rate) => rate > 0);
-    return {
-      total: allRuns.length,
-      active: allRuns.filter((run) => run.status === "open" || run.status === "in_progress").length,
-      completed: allRuns.filter((run) => run.status === "completed").length,
-      averagePassRate: passRates.length ? Math.round(passRates.reduce((sum, rate) => sum + rate, 0) / passRates.length) : 0,
-    };
-  }, [allRuns]);
+  const kpis = runsState.data?.stats ?? { total: 0, active: 0, completed: 0, averagePassRate: 0 };
 
   const assignedCaseIds = new Set((selectedRunLatest?.test_run_cases ?? []).map((runCase) => runCase.test_case_id));
-  const availableTestCases = testCases.filter((testCase) => testCase.status === "ready" && testCase.current_approved_version_id && !assignedCaseIds.has(testCase.id));
+  const availableTestCases = testCases.filter((testCase) => testCase.status === "ready" && testCase.published_version && !assignedCaseIds.has(testCase.id));
   const filteredAvailableTestCases = availableTestCases.filter((testCase) => {
     const normalizedQuery = caseQuery.trim().toLowerCase();
     const matchesQuery = !normalizedQuery || `${testCase.code} ${testCase.title}`.toLowerCase().includes(normalizedQuery);
@@ -272,6 +273,7 @@ export function TestRunsPage() {
   }
 
   function openDetail(run: TestRunListItem) {
+    setRememberedRun(run.id);
     setSelectedRun(run);
     setForm(toForm(run));
     setFormError(null);
@@ -283,6 +285,7 @@ export function TestRunsPage() {
   }
 
   function closeModal() {
+    setRememberedRun(null);
     setModalMode(null);
     setSelectedRun(null);
     setFormError(null);
@@ -409,12 +412,12 @@ export function TestRunsPage() {
     }
   }
 
-  if ((!runsState.data && runsState.loading) || (!allRunsState.data && allRunsState.loading) || (!casesState.data && casesState.loading) || (!usersState.data && usersState.loading)) {
+  if ((!runsState.data && runsState.loading) || (!usersState.data && usersState.loading)) {
     return <LoadingState />;
   }
 
-  if (runsState.error || allRunsState.error || casesState.error || usersState.error) {
-    return <ErrorState message={runsState.error ?? allRunsState.error ?? casesState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
+  if (runsState.error || usersState.error) {
+    return <ErrorState message={runsState.error ?? usersState.error ?? "Data nejsou dostupná."} />;
   }
 
   return (
@@ -435,7 +438,7 @@ export function TestRunsPage() {
         setRefreshKey((value) => value + 1);
       }} />}
       {createdRun && <p role="status" className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
-        Test run „{createdRun.name}“ byl vytvořen. <Link className="underline" to={`/test-runs/${createdRun.id}/execution`}>Spustit execution</Link>
+        Test run „{createdRun.name}“ byl vytvořen. <Link className="underline" to={`/test-runs/${createdRun.id}/execution`}>Pokračovat v testování</Link>
       </p>}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -452,7 +455,7 @@ export function TestRunsPage() {
           <div className="mt-3 text-2xl font-semibold">{kpis.completed}</div>
         </article>
         <article className="rounded-md border border-slate-200 bg-white p-5">
-          <div className="text-sm text-slate-500">Průměrný pass rate</div>
+          <div className="text-sm text-slate-500">Průměrný pass rate dokončených hodnocení</div>
           <div className="mt-3 text-2xl font-semibold">{kpis.averagePassRate}%</div>
         </article>
       </section>
@@ -466,18 +469,18 @@ export function TestRunsPage() {
               placeholder="Hledat test run..."
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setOffset(0); setQuery(event.target.value); }}
             />
           </label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TestRunStatus | "")}>
+            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={statusFilter} onChange={(event) => { setOffset(0); setStatusFilter(event.target.value as TestRunStatus | ""); }}>
               <option value="">Vše</option>
               <option value="open">Otevřené</option>
               <option value="in_progress">Probíhá</option>
               <option value="completed">Dokončené</option>
               <option value="archived">Archivované</option>
             </select>
-            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={environmentFilter} onChange={(event) => setEnvironmentFilter(event.target.value)}>
+            <select className="rounded-md border border-slate-200 px-3 py-2 text-sm" value={environmentFilter} onChange={(event) => { setOffset(0); setEnvironmentFilter(event.target.value); }}>
               <option value="">Vše</option>
               <option value="DEV">DEV</option>
               <option value="TEST">TEST</option>
@@ -544,8 +547,8 @@ export function TestRunsPage() {
                           <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" onClick={() => openDetail(run)} type="button">
                             <Eye size={14} /> Detail
                           </button>
-                          <Link className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" to={`/test-runs/${run.id}/execution`}>
-                            <PlayCircle size={14} /> Spustit execution
+                          <Link className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" to={withReturn(`/test-runs/${run.id}/execution`, "/test-runs")}>
+                            <PlayCircle size={14} /> Pokračovat v testování
                           </Link>
                           <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium" onClick={() => openEdit(run)} type="button">
                             <Pencil size={14} /> Upravit
@@ -567,6 +570,7 @@ export function TestRunsPage() {
             </table>
           </div>
         )}
+        <Pagination total={runsState.data?.total ?? 0} offset={offset} limit={limit} busy={runsState.loading} onChange={setOffset} onLimit={value => { setOffset(0); setLimit(value); }} label="běhů" />
       </section>
 
       {modalMode && (
@@ -656,7 +660,7 @@ export function TestRunsPage() {
                       const testCase = testCases.find((item) => item.id === runCase.test_case_id);
                       return (
                         <div key={runCase.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_180px_120px_96px]">
-                          <div className="font-medium">{testCase ? `${testCase.code} - ${testCase.title}` : runCase.test_case_id}</div>
+                          <div className="font-medium">{runCase.code ? `${runCase.code} · ${runCase.title ?? ""}` : testCase ? `${testCase.code} · ${testCase.title}` : `Test #${runCase.test_case_id}`}</div>
                           <select
                             className="rounded-md border border-slate-200 px-2 py-1 text-sm"
                             disabled={saving || selectedRunLatest.status === "archived"}
@@ -686,6 +690,8 @@ export function TestRunsPage() {
 
                 <section className="rounded-md border border-slate-200 p-4">
                   <div className="font-semibold">Přidat test cases</div>
+                  {casesState.error && <p role="alert" className="text-sm text-rose-700">{casesState.error}</p>}
+                  {casesState.loading && <p role="status" className="text-xs">Načítám dostupné testy…</p>}
                   <CasePickerFilters
                     query={caseQuery}
                     status={caseStatusFilter}
@@ -695,7 +701,7 @@ export function TestRunsPage() {
                   <div className="mt-3 grid gap-3 md:grid-cols-[1fr_220px]">
                     <CasePickerList
                       emptyText={availableTestCases.length === 0 ? "Všechny dostupné test cases už jsou v runu." : "Filtru neodpovídá žádný test case."}
-                      testCases={filteredAvailableTestCases}
+                      testCases={casesState.loading ? [] : filteredAvailableTestCases}
                       selectedCaseIds={selectedCaseIds}
                       onToggle={(testCaseId) =>
                         setSelectedCaseIds((current) =>
@@ -721,6 +727,7 @@ export function TestRunsPage() {
                       </button>
                     </div>
                   </div>
+                  <Pagination total={casesState.data?.total ?? 0} offset={caseOffset} limit={50} busy={casesState.loading} onChange={setCaseOffset} label="dostupných testů" />
                 </section>
               </div>
             ) : null}

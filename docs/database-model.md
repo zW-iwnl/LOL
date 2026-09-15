@@ -1,8 +1,8 @@
 # Databázový model PostgreSQL
 
-Aktualizováno: 2026-09-07
+Aktualizováno: 2026-09-15
 
-Zdrojem pravdy jsou SQLAlchemy modely v backend/app/models a Alembic migrace 0001 až 0021. Aplikace používá PostgreSQL 16 a jedno globální repository bez projektového dělení.
+Zdrojem pravdy jsou SQLAlchemy modely v backend/app/models a Alembic migrace 0001 až 0024. Aplikace používá PostgreSQL 16 a jedno globální repository bez projektového dělení.
 
 ## Organizační model repository
 
@@ -30,8 +30,6 @@ Repository má pouze jednu hierarchickou vrstvu: SuiteGroup.
 | test_case_tag_assignments | M:N test cases a tagy | složený PK a reverse index |
 | test_cases | definice test case | unikátní code, povinná suite, validní status a verze |
 | test_steps | kroky test case | unikátní test_case_id/step_order |
-| requirements | požadavky | unikátní code, validní priority a status |
-| requirement_test_cases | M:N requirementy a test cases | složený PK a reverse index podle case |
 | test_runs | testovací běhy | validní status a plánované časové pořadí |
 | test_run_cases | snapshot case vložený do runu | unikátní test_run_id/test_case_id |
 | test_run_attempts | historie rerunů celého runu | unikátní test_run_id/attempt_number |
@@ -52,7 +50,7 @@ TestRunCase.test_case_snapshot uchovává podobu test case v okamžiku přidán�
 
 Bez produkčních statistik se udržují pouze indexy podložené constraintem nebo konkrétním query patternem:
 
-- FK/reverse indexy pro členství skupin, tagy a requirements;
+- FK/reverse indexy pro členství skupin, tagy a schvalování;
 - unikátní run/case a case/order indexy;
 - created_at/id pro stabilní pořadí test run listu;
 - partial index historie case attempts s provedeným výsledkem;
@@ -77,3 +75,12 @@ Před nasazením nové databázové revize:
 3. zkontrolovat duplicity a neplatné stavové hodnoty;
 4. ověřit zálohu a postup obnovy;
 5. po nasazení sledovat locky, chyby migrace, velikost indexů a latency kritických endpointů.
+
+## Schvalování a odstranění modulu požadavků
+
+Návrhy (`test_case_drafts`), neměnné verze (`test_case_versions`), review (`test_case_reviews`),
+připomínky (`test_case_review_comments`), události (`test_case_events`), idempotentní operace
+(`test_case_operations`) a verzované tagy (`test_case_version_tags`) zůstávají zachované.
+Migrace `0024_remove_requirements` odstraňuje pouze tabulky požadavků a jejich propojení s testy.
+Historické migrace zůstávají součástí instalační posloupnosti. Downgrade obnoví prázdné tabulky;
+odstraněné záznamy se obnovují ze zálohy.

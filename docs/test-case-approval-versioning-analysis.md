@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Schvalování a verzování test cases včetně vzniku během Test Runu
 
 Datum: 7. 9. 2026

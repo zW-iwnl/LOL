@@ -33,6 +33,7 @@ test("main QA workflow is navigable", async ({ page }) => {
 
   await page.getByRole("link", { name: /repository/i }).click();
   await expect(page.getByRole("heading", { name: "Repository", exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Filtry", exact: true }).click();
   const businessAreaFilter = page.getByRole("group", { name: "Business oblast" });
   await expect(businessAreaFilter).toBeVisible();
   await expect(page.getByRole("group", { name: "Aplikace/doména" })).toBeVisible();
@@ -86,6 +87,7 @@ test("repository search opens the matching case and reveals the matching suite",
   const testCaseResult = page.getByRole("button", { name: /ESHOP-TC-001.*Přihlášení platného uživatele/i });
   await expect(testCaseResult).toBeVisible();
   await testCaseResult.click();
+  await page.getByRole("link", { name: "Otevřít detail a úpravy" }).click();
   await expect(page).toHaveURL(/\/test-cases\/\d+/);
   await expect(page.getByRole("heading", { name: /Přihlášení platného uživatele/ })).toBeVisible();
 
@@ -97,7 +99,7 @@ test("repository search opens the matching case and reveals the matching suite",
   await suiteResult.click();
   await expect(page).toHaveURL(/tab=suites/);
   await expect(page).toHaveURL(/suite=\d+/);
-  await expect(page.getByLabel("Hledat test suitu")).toHaveValue(/\d+/);
+  await expect(page.getByRole("heading", { name: "Checkout", exact: true })).toBeVisible();
 
   assertClean();
 });
@@ -110,19 +112,19 @@ test("repository group workspace, dialog and mobile navigation are operable", as
   await expect(page.getByRole("tab", { name: /Skupiny/ })).toHaveAttribute("aria-selected", "true");
   const groupNavigation = page.getByRole("navigation", { name: "Hierarchie skupin" });
   await expect(groupNavigation).toBeVisible();
-  await groupNavigation.getByRole("button").first().click();
-  await expect(
-    page.getByRole("checkbox", { name: "Zahrnout podskupiny přidávané skupiny" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Vazby", exact: true }).click();
+  await page.getByRole("button", { name: "+ Přidat vazbu", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Zahrnout další potomky v tomto umístění" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: /Test suity/ }).click();
   await expect(page.getByRole("heading", { name: "Ploché test suity" })).toBeVisible();
-  await page.getByRole("button", { name: "Nová test suite" }).click();
+  await page.getByRole("button", { name: /Nová test suite/ }).click();
   await expect(page.getByRole("dialog", { name: "Nová test suite" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Test cases/ }).click();
-  await page.getByRole("button", { name: "Nový test case" }).click();
+  await page.getByRole("button", { name: /Nový test case/ }).click();
   const caseEditor = page.locator("#test-case-create-editor");
   await expect(caseEditor).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Nový test case" })).toHaveCount(0);

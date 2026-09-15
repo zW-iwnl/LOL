@@ -21,29 +21,22 @@ OUTPUT = ROOT / "docs" / "database-structure.png"
 WIDTH, HEIGHT = 3650, 2050
 CARD_WIDTH, HEADER_HEIGHT, ROW_HEIGHT = 520, 58, 30
 
-POSITIONS = {
-    "users": (60, 130),
-    "suite_groups": (60, 520),
-    "suite_group_members": (60, 950),
-    "suite_group_test_case_members": (60, 1350),
-    "test_suites": (650, 130),
-    "test_case_tags": (650, 600),
-    "test_case_tag_assignments": (650, 1000),
-    "requirements": (650, 1400),
-    "test_cases": (1240, 130),
-    "requirement_test_cases": (1240, 1100),
-    "test_steps": (1830, 130),
-    "test_runs": (2420, 130),
-    "test_run_attempts": (3010, 130),
-    "test_run_cases": (2420, 750),
-    "test_run_case_attempts": (3010, 720),
-    "test_run_step_results": (2715, 1390),
-}
+# Stack cards by bounded columns, so new schema tables cannot silently disappear.
+POSITIONS = {}
+_column_bottoms = [130] * 6
+for _name, _table in sorted(Base.metadata.tables.items()):
+    _column = min(range(6), key=lambda i: _column_bottoms[i])
+    POSITIONS[_name] = (60 + _column * 590, _column_bottoms[_column])
+    _column_bottoms[_column] += HEADER_HEIGHT + len(_table.columns) * ROW_HEIGHT + 100
+HEIGHT = max(_column_bottoms) + 90
+
 GROUPS = {
     "users": {"users"},
     "repository": {
         "test_suites", "test_cases", "test_case_tags", "test_case_tag_assignments",
-        "test_steps", "suite_groups", "suite_group_members",
+        "test_steps", "suite_groups", "suite_group_relations", "suite_group_members",
+        "test_case_drafts", "test_case_versions", "test_case_reviews", "test_case_review_comments",
+        "test_case_events", "test_case_operations", "test_case_version_tags",
         "suite_group_test_case_members",
     },
     "execution": {
@@ -53,13 +46,11 @@ GROUPS = {
         "test_run_case_attempts",
         "test_run_step_results",
     },
-    "requirements": {"requirements", "requirement_test_cases"},
 }
 COLORS = {
     "users": "#6366f1",
     "repository": "#0f766e",
     "execution": "#2563eb",
-    "requirements": "#7c3aed",
     "support": "#64748b",
 }
 
@@ -197,8 +188,7 @@ def main():
         draw_card(draw, table)
 
     legend = [("Uživatelé", "users"), ("Repository", "repository"),
-              ("Exekuce", "execution"),
-              ("Požadavky", "requirements")]
+              ("Exekuce", "execution")]
     x = 60
     for label, group in legend:
         draw.rounded_rectangle((x, HEIGHT - 58, x + 22, HEIGHT - 36),

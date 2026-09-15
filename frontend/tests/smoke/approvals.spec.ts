@@ -15,6 +15,7 @@ async function login(page: Page, email: string, password: string) {
 
 test("run-origin scenario is frozen, reviewed by another user and keeps its first snapshot", async ({ page, browser }) => {
   test.skip(!reviewerEmail || !reviewerPassword, "Je nutný druhý nezávislý aktivní reviewer (TEST_MANAGER_REVIEWER_EMAIL/PASSWORD).");
+  page.on("dialog", dialog => dialog.accept());
   await login(page, authorEmail, authorPassword);
   const token = await page.evaluate(() => localStorage.getItem("test-manager-token"));
   const headers = { Authorization: `Bearer ${token}` };
@@ -39,9 +40,10 @@ test("run-origin scenario is frozen, reviewed by another user and keeps its firs
   await dialog.getByLabel("Důvod změny / zavedení scénáře").fill("Scénář objevený při testování");
   await dialog.getByRole("button", { name: "Přidat a provést", exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "CHYBA", exact: true }).click();
+  await page.getByRole("button", { name: "Chyba", exact: true }).click();
   const beforeResponse = await page.request.get(`/api/test-runs/${run.id}/execution`, { headers });
   const before = (await beforeResponse.json()).test_run_cases[0];
+  await page.getByText("Akce testu", { exact: true }).click();
   await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Odeslat ke schválení", exact: true }).click();
@@ -54,10 +56,12 @@ test("run-origin scenario is frozen, reviewed by another user and keeps its firs
     await login(reviewerPage, reviewerEmail!, reviewerPassword!);
     await reviewerPage.goto(reviewPath!);
     await reviewerPage.getByRole("button", { name: "Převzít ke schválení", exact: true }).click();
-    await reviewerPage.getByLabel(/Důvod rozhodnutí/).fill("Upřesněte název scénáře a opravte očekávání.");
     await reviewerPage.getByRole("button", { name: "Vrátit k dopracování", exact: true }).click();
+    await reviewerPage.getByLabel(/Důvod rozhodnutí/).fill("Upřesněte název scénáře a opravte očekávání.");
+    await reviewerPage.getByRole("button", { name: "Potvrdit rozhodnutí", exact: true }).click();
     await expect(reviewerPage.getByText("K dopracování", { exact: true })).toBeVisible();
     await page.goto(`/test-runs/${run.id}/execution`);
+    await page.getByText("Akce testu", { exact: true }).click();
     await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
     const correctedTitle = `${title} · opraveno`;
@@ -65,6 +69,7 @@ test("run-origin scenario is frozen, reviewed by another user and keeps its firs
     await page.getByRole("dialog").getByRole("textbox", { name: "Očekávaný výsledek", exact: true }).fill("Formulář zobrazí všechna povinná pole");
     await page.getByRole("dialog").getByRole("button", { name: "Provést upravenou verzi", exact: true }).click();
     await expect(page.getByRole("heading", { name: correctedTitle, exact: true })).toBeVisible();
+    await page.getByText("Akce testu", { exact: true }).click();
     await page.getByRole("button", { name: "Navrhnout změnu scénáře", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: /Otevřít návrh/ }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Odeslat ke schválení", exact: true }).click();

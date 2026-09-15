@@ -60,6 +60,13 @@ def create_test_run(payload: TestRunCreate, db: DbSession, current_user: Current
     return test_run_service.create_test_run(db, payload, current_user)
 
 
+@router.get("/test-runs/page")
+def run_page(db: DbSession, q: str | None = Query(None, max_length=200), status: TestRunStatus | None = None,
+             environment: str | None = Query(None, max_length=100), offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+    from app.services.run_workspace import run_page
+    return run_page(db, q=q, status=status, environment=environment, offset=offset, limit=limit)
+
+
 @router.get("/test-runs/{test_run_id}", response_model=TestRunRead)
 def get_test_run(test_run_id: int, db: DbSession):
     return test_run_service.get_test_run(db, test_run_id)

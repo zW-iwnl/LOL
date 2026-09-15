@@ -1,4 +1,3 @@
-from app.models.requirement import Requirement
 from app.models.test_case import TestCase
 from app.models.test_case_version import TestCaseDraft, TestCaseVersion, TestCaseReview, TestCaseReviewComment, TestCaseEvent, TestCaseOperation, TestCaseVersionTag
 from app.models.test_case_tag import TestCaseTag, TestCaseTagAssignment
@@ -18,7 +17,6 @@ from app.models.test_suite import TestSuite
 from app.models.user import User
 
 __all__ = [
-    "Requirement",
     "SuiteGroup",
     "SuiteGroupMember",
     "SuiteGroupRelation",

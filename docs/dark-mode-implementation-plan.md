@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Dark mode – analýza a implementační plán
 
 Datum: 2026-08-21

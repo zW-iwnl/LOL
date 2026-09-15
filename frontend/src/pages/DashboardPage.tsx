@@ -71,11 +71,11 @@ export function DashboardPage() {
               <tbody>
                 {dashboard.data.recent_test_runs.map((run) => (
                   <tr key={run.id} className="border-t border-slate-100">
-                    <td className="px-5 py-3 font-medium">{run.name}</td>
-                    <td className="px-5 py-3">{run.status}</td>
+                    <td className="px-5 py-3 font-medium"><Link className="text-cyan-800 hover:underline" to={`/test-runs/${run.id}/execution`}>{run.name}</Link></td>
+                    <td className="px-5 py-3">{({ open: "Otevřený", in_progress: "Probíhá", completed: "Dokončený", archived: "Archivovaný" } as Record<string, string>)[run.status] ?? run.status}</td>
                     <td className="px-5 py-3">{run.environment ?? "-"}</td>
-                    <td className="px-5 py-3">-</td>
-                    <td className="px-5 py-3">-</td>
+                    <td className="px-5 py-3">{run.executed ?? 0}/{run.total ?? 0}</td>
+                    <td className="px-5 py-3">{run.executed ? `${run.pass_rate}%` : "Dosud nehodnoceno"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -85,7 +85,7 @@ export function DashboardPage() {
 
         <aside className="space-y-6">
           <div className="rounded-md border border-slate-200 bg-white p-5">
-            <h2 className="text-base font-semibold">Výsledky testů</h2>
+            <h2 className="text-base font-semibold">Výsledky testů</h2><p className="mt-1 text-xs text-slate-500">Pass rate: úspěšné ze všech vyhodnocených testů, včetně blokovaných a přeskočených.</p>
             <div className="mt-5 space-y-4">
               {dashboard.data.results.map((item) => (
                 <div key={item.result}>
@@ -94,7 +94,7 @@ export function DashboardPage() {
                     <span className="font-medium">{item.count}</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-100">
-                    <div className={`h-2 rounded-full ${resultColors[item.result]}`} style={{ width: `${Math.min(item.count * 8, 100)}%` }} />
+                    <div className={`h-2 rounded-full ${resultColors[item.result]}`} style={{ width: `${item.count / Math.max(1, dashboard.data!.results.reduce((total, row) => total + row.count, 0)) * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -105,9 +105,12 @@ export function DashboardPage() {
             <h2 className="text-base font-semibold">Rychlé akce</h2>
             <div className="mt-4 grid gap-2">
               {[
+                { label: "Moje review", to: "/test-case-approvals?assigned_to_me=true" },
+                { label: "Vrácené k dopracování", to: "/test-case-approvals?tab=mine&status=changes_requested" },
+                { label: "Moje rozpracované návrhy", to: "/test-case-approvals?tab=drafts&mine=true" },
                 { label: "Nový test case", to: "/test-cases?new=1" },
                 { label: "Založit test run", to: "/test-runs?new=1" },
-                { label: "Otevřít execution", to: "/test-runs" },
+                { label: "Pokračovat v testování", to: "/test-runs" },
               ].map((action) => (
                 <Link key={action.label} to={action.to} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50">
                   <Activity size={16} className="text-cyan-700" /> {action.label}

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.common import TestRunCaseResult, TestRunStatus, TestRunStepResultValue, TimestampFields
 from app.schemas.test_case import TestCaseRead
 from app.schemas.test_run_selection import RunSelection
+from app.schemas.execution_navigation import ExecutionNavigation
 
 
 class RunTextValidation(BaseModel):
@@ -169,6 +170,7 @@ class TestRunAttemptRead(TimestampFields):
 
 
 class TestRunExecutionRead(TestRunRead):
+    navigation: ExecutionNavigation = Field(default_factory=ExecutionNavigation)
     definition_counts: dict[str, int] = Field(default_factory=dict)
     attempts: list[TestRunAttemptRead] = []
     selected_attempt_id: int

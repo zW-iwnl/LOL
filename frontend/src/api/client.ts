@@ -37,7 +37,7 @@ export type Dashboard = {
     active_test_runs_count: number;
     pass_rate: number;
   };
-  recent_test_runs: Array<{ id: number; name: string; status: string; environment: string | null }>;
+  recent_test_runs: Array<{ id: number; name: string; status: string; environment: string | null; total: number; executed: number; pass_rate: number }>;
   results: Array<{ result: TestRunCaseResult; count: number }>;
 };
 

@@ -93,10 +93,8 @@
 - volitelně verzování test suites při změně názvu, parent suity nebo struktury stromu
 - ochrana proti tiché změně test case, který už byl použitý v historickém test runu
 
-## 10. Requirements / Traceability
-- evidence požadavků v rámci projektu
-- vazba Requirement -> Test Case
-- vazba Test Case -> Test Run Case přes execution
-- coverage report: požadavky bez test case, test cases bez požadavku
-- filtr podle rizika, statusu požadavku a výsledku testování
-- export traceability matrix do CSV/XLSX
+## 10. Kompaktní workflow
+- Repository → návrh → nezávislé review → publikace → test run → execution.
+- Stránkované fronty a čitelné porovnání verzí, stálá rozhodovací lišta.
+- Zachování návratového kontextu a rozepsaných vstupů.
+- Přesné souhrny běhů a proklik pracovních položek z Dashboardu.

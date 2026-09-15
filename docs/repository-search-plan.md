@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Repository vyhledávání – analýza a implementační plán
 
 > Projektové endpointy v tomto původním plánu byly nahrazeny globálním `/api/repository/search`. Viz [Jedno globální repository bez projektů](single-repository-architecture.md).

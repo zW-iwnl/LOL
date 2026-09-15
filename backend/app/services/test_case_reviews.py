@@ -172,7 +172,7 @@ def resolve_comment(db, comment_id, user):
     return comment
 
 
-def read(db, review, *, detail=False):
+def read(db, review, *, detail=False, user=None):
     version = db.get(TestCaseVersion, review.test_case_version_id)
     author = db.get(User, review.submitted_by)
     reviewer = db.get(User, review.reviewer_id) if review.reviewer_id else None
@@ -184,25 +184,25 @@ def read(db, review, *, detail=False):
         base = db.get(TestCaseVersion, review.base_approved_version_id) if review.base_approved_version_id else None
         result.update(version=versions.version_read(db, version), changes=diff(base.content_snapshot if base else {}, version.content_snapshot),
                       comments=[versions.row_read(c) for c in db.query(TestCaseReviewComment).filter(TestCaseReviewComment.review_id == review.id).order_by(TestCaseReviewComment.id)])
+        if user is not None:
+            from app.services.approval_workspace import capabilities
+            from app.models import TestRun, TestRunCaseAttempt, TestCaseEvent
+            comments = db.query(TestCaseReviewComment).filter(TestCaseReviewComment.review_id == review.id).order_by(TestCaseReviewComment.id).all()
+            names = dict(db.query(User.id, User.name).filter(User.id.in_({c.author_id for c in comments})).all())
+            result["comments"] = [{**versions.row_read(c), "author_name": names.get(c.author_id, f"#{c.author_id}")} for c in comments]
+            result["capabilities"] = capabilities(db, review, version, user, comments)
+            draft = db.get(TestCaseDraft, version.source_draft_id)
+            attempt = db.get(TestRunCaseAttempt, draft.origin_case_attempt_id) if draft and draft.origin_case_attempt_id else None
+            result["origin_case_attempt_id"] = attempt.id if attempt else None
+            result["origin_run_attempt_id"] = attempt.test_run_attempt_id if attempt else None
+            result["origin_run_case_id"] = attempt.test_run_case_id if attempt else None
+            run = db.get(TestRun, version.origin_run_id) if version.origin_run_id else None
+            result["origin_run_name"] = run.name if run else None
+            result["base_version_number"] = base.version_number if base else None
+            result["history"] = [versions.row_read(event) for event in db.query(TestCaseEvent).filter(TestCaseEvent.test_case_id == review.test_case_id).order_by(TestCaseEvent.id.desc()).limit(100)]
     return result
 
 
-def queue(db, user, *, status=None, q=None, mine=False, unassigned=False, decided=False, origin_run_id=None, tags=None, offset=0, limit=50):
-    query = db.query(TestCaseReview).join(TestCaseVersion, TestCaseVersion.id == TestCaseReview.test_case_version_id)
-    if status:
-        query = query.filter(TestCaseReview.status == status)
-    if decided:
-        query = query.filter(TestCaseReview.status != "pending")
-    if mine:
-        query = query.filter(or_(TestCaseReview.reviewer_id == user.id, TestCaseReview.submitted_by == user.id))
-    if unassigned:
-        query = query.filter(TestCaseReview.reviewer_id.is_(None))
-    if origin_run_id:
-        query = query.filter(TestCaseVersion.origin_run_id == origin_run_id)
-    if q:
-        query = query.filter(or_(TestCaseVersion.content_snapshot["title"].as_string().ilike(f"%{q.strip()}%"), TestCaseVersion.content_snapshot["code"].as_string().ilike(f"%{q.strip()}%")))
-    for category, ids in (tags or {}).items():
-        if ids:
-            query = query.filter(TestCaseVersion.id.in_(db.query(TestCaseVersionTag.version_id).filter(TestCaseVersionTag.category == category, TestCaseVersionTag.tag_id.in_(ids))))
-    total = query.count()
-    return {"total": total, "items": [read(db, r) for r in query.order_by(TestCaseReview.created_at, TestCaseReview.id).offset(offset).limit(limit)]}
+def queue(db, user, **filters):
+    from app.services.approval_workspace import queue as workspace_queue
+    return workspace_queue(db, user, **filters)

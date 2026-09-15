@@ -1,3 +1,5 @@
+> Historický podklad: modul Requirements / traceability byl odstraněn migrací 0024. Aktuální workflow popisuje [implementační přehled](workflow-workspace-implementation.md).
+
 # Test Manager - zadání, fungování a architektura
 
 > Projektové části tohoto původního návrhu jsou od 2026-08-24 neplatné. Aktuální architekturu popisuje [Jedno globální repository bez projektů](single-repository-architecture.md).

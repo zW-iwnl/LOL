@@ -1,3 +1,5 @@
+from typing import Literal
+from app.services import approval_workspace
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.api.deps import CurrentUser, DbSession
@@ -77,17 +79,20 @@ def version_diff(version_id: int, base_version_id: int, db: DbSession):
 
 
 @router.get("/test-case-reviews")
-def queue(db: DbSession, user: CurrentUser, status: str | None = None, q: str | None = None, mine: bool = False,
+def queue(db: DbSession, user: CurrentUser, status: Literal["pending", "approved", "changes_requested", "rejected", "withdrawn", ""] | None = None, q: str | None = Query(None, max_length=200), mine: bool = False,
+          case_id: int | None = Query(None, gt=0), assigned_to_me: bool = False, author_id: int | None = Query(None, gt=0), reviewer_id: int | None = Query(None, gt=0),
+          suite_id: int | None = Query(None, gt=0), group_id: int | None = Query(None, gt=0), include_descendants: bool = True,
           unassigned: bool = False, decided: bool = False, origin_run_id: int | None = None,
           business_area_id: list[int] | None = Query(None), application_domain_id: list[int] | None = Query(None), object_type_id: list[int] | None = Query(None),
           limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
     return reviews.queue(db, user, status=status, q=q, mine=mine, unassigned=unassigned, decided=decided, origin_run_id=origin_run_id,
-                         tags={"business_area": business_area_id, "application_domain": application_domain_id, "object_type": object_type_id}, limit=limit, offset=offset)
+                         tags={"business_area": business_area_id, "application_domain": application_domain_id, "object_type": object_type_id}, limit=limit, offset=offset,
+                         case_id=case_id, assigned_to_me=assigned_to_me, author_id=author_id, reviewer_id=reviewer_id, suite_id=suite_id, group_id=group_id, include_descendants=include_descendants)
 
 
 @router.get("/test-case-reviews/{review_id}")
-def review(review_id: int, db: DbSession):
-    return reviews.read(db, reviews.get_review(db, review_id), detail=True)
+def review(review_id: int, db: DbSession, user: CurrentUser):
+    return reviews.read(db, reviews.get_review(db, review_id), detail=True, user=user)
 
 
 @router.post("/test-case-reviews/{review_id}/decisions")
@@ -136,3 +141,14 @@ def run_proposals(run_id: int, db: DbSession, user: CurrentUser):
 @router.get("/test-cases/{case_id}/events")
 def events(case_id: int, db: DbSession, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
     return [versions.row_read(e) for e in db.query(TestCaseEvent).filter(TestCaseEvent.test_case_id == case_id).order_by(TestCaseEvent.id.desc()).offset(offset).limit(limit)]
+
+
+@router.get("/test-case-draft-summaries")
+def draft_summaries(db: DbSession, user: CurrentUser, mine: bool = False, q: str | None = Query(None, max_length=200),
+                    origin_run_id: int | None = Query(None, gt=0), suite_id: int | None = Query(None, gt=0),
+                    group_id: int | None = Query(None, gt=0), include_descendants: bool = True, author_id: int | None = Query(None, gt=0),
+                    business_area_id: list[int] | None = Query(None), application_domain_id: list[int] | None = Query(None), object_type_id: list[int] | None = Query(None),
+                    limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
+    return approval_workspace.draft_summaries(db, user, mine=mine, q=q, origin_run_id=origin_run_id, suite_id=suite_id,
+        group_id=group_id, include_descendants=include_descendants, author_id=author_id,
+        tags={"business_area": business_area_id, "application_domain": application_domain_id, "object_type": object_type_id}, limit=limit, offset=offset)

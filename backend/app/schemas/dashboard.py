@@ -12,6 +12,9 @@ class DashboardRun(BaseModel):
     name: str
     status: str
     environment: str | None
+    total: int = 0
+    executed: int = 0
+    pass_rate: float = 0
 
 
 class DashboardResult(BaseModel):

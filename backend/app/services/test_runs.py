@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from app.services.execution_navigation import execution_navigation
+
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
@@ -165,6 +167,7 @@ def get_execution(db: Session, test_run_id: int, *, attempt_id: int | None = Non
         "attempts": test_run.attempts,
         "selected_attempt_id": selected_attempt.id,
         "test_run_cases": execution_cases,
+        "navigation": execution_navigation(db, [item["test_case_id"] for item in execution_cases]),
     }
 
 

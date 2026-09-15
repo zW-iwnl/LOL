@@ -42,7 +42,6 @@ class TestCase(TimestampMixin, Base):
         back_populates="test_case",
         passive_deletes=True,
     )
-    requirements = relationship("Requirement", secondary="requirement_test_cases", back_populates="test_cases")
     tag_assignments = relationship(
         "TestCaseTagAssignment",
         back_populates="test_case",

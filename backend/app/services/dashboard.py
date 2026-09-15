@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models import TestCase, TestRun, TestRunCase
@@ -28,6 +28,10 @@ def get_dashboard(db: Session) -> DashboardRead:
         .all()
     )
 
+    progress = {row.test_run_id: row for row in db.query(TestRunCase.test_run_id, func.count().label("total"),
+        func.sum(case((TestRunCase.result != "not_run", 1), else_=0)).label("executed"),
+        func.sum(case((TestRunCase.result == "passed", 1), else_=0)).label("passed")).filter(TestRunCase.test_run_id.in_([run.id for run in recent_runs])).group_by(TestRunCase.test_run_id)}
+
     return DashboardRead(
         stats=DashboardStats(
             test_cases_count=test_cases_count,
@@ -35,7 +39,9 @@ def get_dashboard(db: Session) -> DashboardRead:
             pass_rate=pass_rate,
         ),
         recent_test_runs=[
-            DashboardRun(id=run.id, name=run.name, status=run.status, environment=run.environment)
+            DashboardRun(id=run.id, name=run.name, status=run.status, environment=run.environment, total=progress[run.id].total if run.id in progress else 0,
+                         executed=progress[run.id].executed if run.id in progress else 0,
+                         pass_rate=round(progress[run.id].passed * 100 / progress[run.id].executed, 2) if run.id in progress and progress[run.id].executed else 0)
             for run in recent_runs
         ],
         results=[DashboardResult(result=result, count=count) for result, count in result_counts.items()],

@@ -24,7 +24,7 @@ export function RunCaseCreatePanel({ runId, caseId, caseAttemptId, onClose, onEx
     } catch (e) { setError(e instanceof Error ? e.message : "Vytvoření selhalo."); }
     finally { setBusy(false); }
   }
-  return <AccessibleDialog title={caseId ? "Návrh změny scénáře v runu" : "Nový test case v tomto runu"} onClose={() => { if (!dirty || window.confirm("Zavřít editor a zahodit neuložené změny návrhu?")) onClose(); }} panelClassName="max-w-4xl">
+  return <AccessibleDialog title={caseId ? "Návrh změny scénáře v runu" : "Nový test case v tomto runu"} onClose={() => { if (!dirty || window.confirm("Zavřít editor? Rozepsané změny návrhu zůstanou uložené v této kartě prohlížeče.")) onClose(); }} panelClassName="max-w-4xl">
     {draft ? <CaseDraftEditor key={draft.id} initial={draft} runId={draft.origin_run_id === runId ? runId : undefined} caseAttemptId={caseAttemptId} onSaved={onExecuted} onDirtyChange={setDirty} /> : <div className="space-y-4">
       <p className="text-sm text-slate-500">Návrh lze uložit, provést v tomto runu a následně odeslat nezávislému reviewerovi. Do ostatních runů se dostane až po schválení.</p>
       {(proposals.data?.items ?? []).map(d => <button type="button" key={d.id} className="block w-full rounded-md border border-slate-200 p-3 text-left" onClick={() => setDraft(d)}>Otevřít návrh {d.code} · {d.content.title} · {d.status}</button>)}

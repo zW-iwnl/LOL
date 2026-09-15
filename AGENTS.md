@@ -84,12 +84,6 @@ TestRunCase result:
 - skipped
 
 
-Requirement priority:
-- low
-- medium
-- high
-- critical
-
 ## UI pravidla
 Aplikace má mít:
 - levé menu

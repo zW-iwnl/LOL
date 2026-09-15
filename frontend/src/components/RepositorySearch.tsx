@@ -8,12 +8,14 @@ import {
 } from "../api/repositorySearch";
 
 type RepositorySearchProps = {
+  compact?: boolean;
   query: string;
   type: RepositorySearchType;
   businessAreaIds?: number[];
   applicationDomainIds?: number[];
   objectTypeIds?: number[];
   filterControls?: ReactNode;
+  activeFilterChips?: ReactNode;
   onQueryChange: (query: string) => void;
   onTypeChange: (type: RepositorySearchType) => void;
   onSelectSuite: (suiteId: number) => void;
@@ -29,18 +31,28 @@ const typeOptions: Array<{ value: RepositorySearchType; label: string }> = [
 ];
 
 export function RepositorySearch({
+  compact = false,
   query,
   type,
   businessAreaIds = [],
   applicationDomainIds = [],
   objectTypeIds = [],
   filterControls,
+  activeFilterChips,
   onQueryChange,
   onSelectGroup,
   onTypeChange,
   onSelectSuite,
   onSelectTestCase,
 }: RepositorySearchProps) {
+  const container = useRef<HTMLDivElement>(null);
+  const [resultsOpen, setResultsOpen] = useState(Boolean(query.trim()));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    function outside(event: PointerEvent) { if (!container.current?.contains(event.target as Node)) setResultsOpen(false); }
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, []);
   const [items, setItems] = useState<RepositorySearchItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,26 +105,24 @@ export function RepositorySearch({
   ]);
 
   return (
-    <>
-      <div className="border-b border-slate-200 p-4">
-        <div>
+    <div ref={container} className={compact ? "repository-search" : ""} onKeyDown={event => { if (event.key === "Escape") setResultsOpen(false); }}>
+      <div className={compact ? "repository-search-controls p-2" : "border-b border-slate-200 p-4"}>
+        <div className={compact ? "sr-only" : ""}>
           <h2 className="font-semibold text-slate-900">Vyhledávání a filtry</h2>
           <p className="mt-1 text-xs text-slate-500">Suity i skupiny automaticky zahrnují tagy svých test casů.</p>
         </div>
 
-        <div className={filterControls
-          ? "mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_repeat(3,minmax(160px,1fr))]"
-          : "mt-4"}
-        >
-          <label className="block text-sm">
-            <span className="font-medium">Vyhledat</span>
+        <div className={compact ? "flex items-end gap-2" : "mt-4"}>
+          <label className="block flex-1 text-sm">
+            <span className={compact ? "sr-only" : "font-medium"}>Vyhledat</span>
             <span className="relative mt-1 block">
               <Search className="absolute left-2.5 top-2.5 text-slate-400" size={16} aria-hidden="true" />
               <input
                 aria-label="Hledat v repository"
                 className="w-full rounded-md border border-slate-200 bg-white py-2 pl-8 pr-8 text-sm"
                 value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
+                onFocus={() => setResultsOpen(true)}
+                onChange={(event) => { setResultsOpen(true); onQueryChange(event.target.value); }}
                 placeholder="Suita, skupina, tag, kód nebo název test case"
               />
               {query && (
@@ -128,10 +138,12 @@ export function RepositorySearch({
               )}
             </span>
           </label>
-          {filterControls}
+          {compact && filterControls && <button type="button" className="workspace-button mb-0.5" aria-expanded={filtersOpen} onClick={() => { setFiltersOpen(!filtersOpen); setResultsOpen(true); }}>Filtry{hasTagFilter ? ` (${businessAreaIds.length + applicationDomainIds.length + objectTypeIds.length})` : ""}</button>}
+          {!compact && filterControls}
         </div>
 
-        <div aria-label="Typ výsledků hledání" className="mt-3 flex flex-wrap items-center gap-1" role="group">
+        {compact && filtersOpen && <div className="repository-search-filters mt-2 grid gap-2 md:grid-cols-3">{filterControls}</div>}
+        <div aria-label="Typ výsledků hledání" className="mt-1 flex flex-wrap items-center gap-1" role="group">
           <span className="mr-1 text-xs font-medium text-slate-500">Hledat v:</span>
           {typeOptions.map((option) => (
             <button
@@ -140,7 +152,7 @@ export function RepositorySearch({
               className={type === option.value
                 ? "rounded-md bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700"
                 : "rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"}
-              onClick={() => onTypeChange(option.value)}
+              onClick={() => { setResultsOpen(true); onTypeChange(option.value); }}
               type="button"
             >
               {option.label}
@@ -152,8 +164,10 @@ export function RepositorySearch({
         )}
       </div>
 
-      {active && (
-        <div className="max-h-[420px] overflow-y-auto border-t border-slate-100 p-2" aria-live="polite">
+      {compact && hasTagFilter && <div className="flex flex-wrap items-center gap-1 px-2 pb-2 text-xs"><span className="text-slate-500">Filtry hledání:</span>{activeFilterChips}</div>}
+      {active && (!compact || resultsOpen) && (
+        <div className={compact ? "repository-search-results" : "max-h-[420px] overflow-y-auto border-t border-slate-100 p-2"} aria-live="polite">
+          {compact && <div className="flex justify-between px-3 py-1 text-xs text-slate-500"><span>Nejvýše 20 výsledků · hledání v celém repository</span><button type="button" onClick={() => setResultsOpen(false)}>Zavřít výsledky</button></div>}
           {loading && (
             <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-slate-500">
               <LoaderCircle className="animate-spin" size={16} /> Hledám…
@@ -171,7 +185,7 @@ export function RepositorySearch({
                 <button
                   key={`suite-${item.id}`}
                   className="flex w-full gap-2 rounded-md px-3 py-2 text-left hover:bg-slate-50"
-                  onClick={() => onSelectSuite(item.id)}
+                  onClick={() => { setResultsOpen(false); onSelectSuite(item.id); }}
                   type="button"
                 >
                   <Folder className="mt-0.5 shrink-0 text-amber-500" size={16} aria-hidden="true" />
@@ -193,7 +207,7 @@ export function RepositorySearch({
                 <button
                   key={`group-${item.id}`}
                   className="flex w-full gap-2 rounded-md px-3 py-2 text-left hover:bg-slate-50"
-                  onClick={() => onSelectGroup(item.id)}
+                  onClick={() => { setResultsOpen(false); onSelectGroup(item.id); }}
                   type="button"
                 >
                   <Layers3 className="mt-0.5 shrink-0 text-violet-600" size={16} aria-hidden="true" />
@@ -215,7 +229,7 @@ export function RepositorySearch({
                 <button
                   key={`case-${item.id}`}
                   className="flex w-full gap-2 rounded-md px-3 py-2 text-left hover:bg-slate-50"
-                  onClick={() => onSelectTestCase(item.id, item.suite_id)}
+                  onClick={() => { setResultsOpen(false); onSelectTestCase(item.id, item.suite_id); }}
                   type="button"
                 >
                   <FileCheck2 className="mt-0.5 shrink-0 text-cyan-600" size={16} aria-hidden="true" />
@@ -238,6 +252,6 @@ export function RepositorySearch({
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

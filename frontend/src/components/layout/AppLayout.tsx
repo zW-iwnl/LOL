@@ -4,12 +4,14 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   ShieldCheck,
 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import type { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
 import { AccessibleDialog } from "../AccessibleDialog";
@@ -18,7 +20,6 @@ const navigation = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { label: "Repository", to: "/test-cases", icon: ClipboardCheck },
   { label: "Schvalování", to: "/test-case-approvals", icon: ShieldCheck },
-  { label: "Requirements", to: "/requirements", icon: ShieldCheck },
   { label: "Test Runs", to: "/test-runs", icon: BarChart3 },
   { label: "Nastavení", to: "/settings", icon: ShieldCheck },
 ];
@@ -30,6 +31,10 @@ type AppLayoutProps = {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const workspaceLayout = /^\/(test-runs\/\d+\/execution|execution\/\d+)\/?$/.test(pathname) || /^\/(test-cases(?:\/\d+)?|test-case-approvals(?:\/\d+)?)\/?$/.test(pathname);
+  const [executionMenuExpanded, setExecutionMenuExpanded] = useState(false);
+  const compact = workspaceLayout && !executionMenuExpanded;
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const initials = (user?.name ?? user?.email ?? "U")
@@ -53,16 +58,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-900">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white px-4 py-5 lg:block">
+      <aside className={`fixed inset-y-0 left-0 hidden border-r border-slate-200 bg-white py-5 lg:block ${compact ? "w-16 px-2" : "w-64 px-4"}`}>
         <div className="mb-8 px-2">
-          <div className="text-lg font-semibold">FET - fio evidence testů</div>
-          <div className="text-sm text-slate-500">Interní QA portál</div>
+          <div className="text-lg font-semibold">{compact ? "FET" : "FET - fio evidence testů"}</div>
+          {!compact && <div className="text-sm text-slate-500">Interní QA portál</div>}
         </div>
-        <NavigationLinks />
+        <NavigationLinks compact={compact} />
       </aside>
-      <div className="lg:pl-64">
+      <div className={`${compact ? "lg:pl-16" : "lg:pl-64"} ${workspaceLayout ? "execution-app-shell" : ""}`}>
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
-          <div className="grid gap-3 xl:grid-cols-[220px_minmax(240px,1fr)_auto] xl:items-center">
+          <div className={workspaceLayout ? "flex items-center gap-3" : "grid gap-3 xl:grid-cols-[220px_minmax(240px,1fr)_auto] xl:items-center"}>
             <div className="flex min-w-0 items-center gap-3">
               <button
                 aria-label="Otevřít hlavní navigaci"
@@ -72,12 +77,13 @@ export function AppLayout({ children }: AppLayoutProps) {
               >
                 <Menu size={20} aria-hidden="true" />
               </button>
-              <div className="min-w-0">
+              {workspaceLayout && <button type="button" className="hidden h-9 w-9 shrink-0 place-items-center rounded border border-slate-200 lg:grid" aria-label={compact ? "Rozbalit hlavní menu" : "Sbalit hlavní menu"} onClick={() => setExecutionMenuExpanded(value => !value)}>{compact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>}
+              <div className={workspaceLayout ? "hidden 2xl:block" : "min-w-0"}>
                 <div className="text-sm font-medium text-slate-500">QA tým</div>
                 <h1 className="truncate text-xl font-semibold">Správa testování</h1>
               </div>
             </div>
-            <form className="relative hidden w-full md:block" onSubmit={handleSearch}>
+            <form className={`relative hidden w-full md:block ${workspaceLayout ? "flex-1" : ""}`} onSubmit={handleSearch}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} aria-hidden="true" />
               <input
                 aria-label="Globální hledání v repository"
@@ -108,7 +114,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </div>
         </header>
-        <main className="px-4 py-6 lg:px-8">{children}</main>
+        <main className={workspaceLayout ? "execution-app-main" : "px-4 py-6 lg:px-8"}>{children}</main>
       </div>
 
       {mobileNavigationOpen && (
@@ -138,7 +144,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavigationLinks({ onNavigate, compact = false }: { onNavigate?: () => void; compact?: boolean }) {
   return (
     <nav aria-label="Hlavní navigace" className="space-y-1">
       {navigation.map((item) => {
@@ -154,9 +160,11 @@ function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
             ].join(" ")}
             onClick={onNavigate}
+            title={compact ? item.label : undefined}
+            aria-label={item.label}
           >
             <Icon size={18} aria-hidden="true" />
-            {item.label}
+            {!compact && item.label}
           </NavLink>
         );
       })}

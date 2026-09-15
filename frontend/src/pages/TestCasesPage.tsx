@@ -7,16 +7,16 @@ import {
   createTestSuite,
   deleteTestCase,
   deleteTestSuite,
-  getSuiteGroups,
-  getTestCases,
   getTestCaseTags,
   getTestSuites,
   updateTestCase,
   updateTestSuite,
-  type SuiteGroup,
-  type TestCase,
   type TestSuite,
 } from "../api/client";
+import { getRepositoryStructure, type RepositoryGroup, type RepositoryCase } from "../api/repositoryWorkspace";
+import { RepositoryCasePreview } from "../components/repository/RepositoryCasePreview";
+import { VirtualList } from "../components/repository/VirtualList";
+import { normalizeSearch } from "../components/test-runs/selection";
 import type { RepositorySearchType } from "../api/repositorySearch";
 import { ErrorState, LoadingState, useApiResource } from "../api/hooks";
 import { AccessibleDialog } from "../components/AccessibleDialog";
@@ -64,12 +64,13 @@ export function TestCasesPage() {
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const suitesState = useApiResource(getTestSuites, [refreshKey]);
-  const groupsState = useApiResource(getSuiteGroups, [refreshKey]);
-  const casesState = useApiResource(() => getTestCases(), [refreshKey]);
+  const activeTab = parseTab(searchParams.get("tab"));
+  const [groupRefreshKey, setGroupRefreshKey] = useState(0);
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const suitesState = useApiResource(getTestSuites, [refreshKey, activeTab === "suites"]);
+  const groupsState = useApiResource(getRepositoryStructure, [refreshKey, groupRefreshKey]);
   const tagsState = useApiResource(getTestCaseTags, [refreshKey]);
 
-  const activeTab = parseTab(searchParams.get("tab"));
   const searchType = parseSearchType(searchParams.get("searchType"));
   const selectedGroupId = parsePositiveId(searchParams.get("group"));
   const selectedSuiteId = parsePositiveId(searchParams.get("suite"));
@@ -79,8 +80,7 @@ export function TestCasesPage() {
   const urlSearchQuery = searchParams.get("q") ?? "";
   const shouldOpenCaseForm = searchParams.get("new") === "1";
   const suites = suitesState.data ?? [];
-  const groups = groupsState.data ?? [];
-  const testCases = (casesState.data ?? []).filter(item => item.status === "ready" && item.current_approved_version_id);
+  const groups = groupsState.data?.groups ?? [];
   useEffect(() => {
     setSearchQuery(urlSearchQuery);
   }, [urlSearchQuery]);
@@ -104,12 +104,11 @@ export function TestCasesPage() {
     }, { replace: true });
   }, [shouldOpenCaseForm, suitesState.loading]);
   const tags = tagsState.data ?? [];
-  const loading = [suitesState, groupsState, casesState, tagsState]
+  const loading = [suitesState, groupsState, tagsState]
     .some((state) => state.loading && state.data === null);
   const loadError = [
     suitesState.error,
     groupsState.error,
-    casesState.error,
     tagsState.error,
   ].find(Boolean);
 
@@ -157,11 +156,12 @@ export function TestCasesPage() {
     }, { replace: true });
   }
 
-  function setSelectedGroupId(groupId: number | null) {
+  function setSelectedGroupId(groupId: number | null, path: number[] = []) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("tab", "groups");
-      next.delete("q");
+      if (path.length > 1) next.set("groupPath", path.join("."));
+      else next.delete("groupPath");
       if (groupId === null) next.delete("group");
       else next.set("group", String(groupId));
       return next;
@@ -173,7 +173,6 @@ export function TestCasesPage() {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("tab", "suites");
-      next.delete("q");
       next.set("suite", String(suiteId));
       return next;
     }, { replace: true });
@@ -314,7 +313,7 @@ export function TestCasesPage() {
     }
   }
 
-  async function removeCase(testCase: TestCase) {
+  async function removeCase(testCase: RepositoryCase) {
     if (!window.confirm(
       `Vyřadit test case ${testCase.code}? Návrhy, verze a historie provedení zůstanou zachované.`,
     )) return;
@@ -331,7 +330,7 @@ export function TestCasesPage() {
     }
   }
 
-  async function moveCase(testCase: TestCase, suiteId: number) {
+  async function moveCase(testCase: RepositoryCase, suiteId: number) {
     if (suiteId === testCase.suite_id) return;
     const suite = suites.find((item) => item.id === suiteId);
     if (!window.confirm(
@@ -374,11 +373,8 @@ export function TestCasesPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Repository"
-        description="Skupiny, ploché test suity, test cases a tagy na jednom místě."
-      />
+    <div className="repository-page">
+      <h1 className="text-base font-semibold">Repository</h1>
       {feedback && (
         <div
           aria-live="polite"
@@ -393,6 +389,10 @@ export function TestCasesPage() {
 
       <section className="rounded-md border border-slate-200 bg-white">
         <RepositorySearch
+          compact
+          activeFilterChips={([
+            ["businessAreaId", businessAreaFilterIds], ["applicationDomainId", applicationDomainFilterIds], ["objectTypeId", objectTypeFilterIds],
+          ] as const).flatMap(([parameter, ids]) => ids.map(id => <button type="button" key={`${parameter}:${id}`} className="rounded bg-cyan-50 px-2 py-1 text-cyan-800" onClick={() => setRepositoryTagFilter(parameter, ids.filter(value => value !== id))}>{tags.find(tag => tag.id === id)?.name ?? `#${id}`} ×</button>))}
           applicationDomainIds={applicationDomainFilterIds}
           businessAreaIds={businessAreaFilterIds}
           filterControls={(
@@ -426,19 +426,17 @@ export function TestCasesPage() {
           onQueryChange={setRepositorySearchQuery}
           onTypeChange={setRepositorySearchType}
           onSelectGroup={(groupId) => {
-            setSearchQuery("");
             setSelectedGroupId(groupId);
           }}
           onSelectSuite={(suiteId) => {
-            setSearchQuery("");
             showSuiteInList(suiteId);
           }}
-          onSelectTestCase={(testCaseId) => navigate(`/test-cases/${testCaseId}`)}
+          onSelectTestCase={setPreviewId}
         />
       </section>
 
       {showCaseForm && (
-        <TestCaseCreatePanel
+        <div className="repository-editor-scroll"><TestCaseCreatePanel
           error={formError}
           form={caseForm}
           saving={saving}
@@ -453,30 +451,33 @@ export function TestCasesPage() {
             setFormError(null);
           }}
           onSubmit={saveCase}
-        />
+        /></div>
       )}
 
-      <RepositoryWorkspace
+      {!showCaseForm && <RepositoryWorkspace
         activeTab={activeTab}
         onTabChange={setActiveTab}
         groups={groups}
         suites={suites}
-        testCases={testCases}
+        testCaseCount={groupsState.data?.test_case_count ?? 0}
+        refreshKey={refreshKey}
+        onSelectedSuiteChange={showSuiteInList}
         tags={tags}
         selectedGroupId={selectedGroupId}
         onSelectedGroupChange={setSelectedGroupId}
         selectedSuiteId={selectedSuiteId}
-        onChanged={refresh}
+        onChanged={() => setGroupRefreshKey(value => value + 1)}
         onCreateSuite={openCreateSuite}
         onEditSuite={openEditSuite}
         onDeleteSuite={(suite) => void removeSuite(suite)}
-        onCreateCase={openCreateCase}
-        onOpenCase={(testCase) => navigate(`/test-cases/${testCase.id}`)}
-        onDeleteCase={(testCase) => void removeCase(testCase)}
-        onMoveCase={(testCase, suiteId) => void moveCase(testCase, suiteId)}
+        onCreate={openCreateCase}
+        onOpen={setPreviewId}
+        onDelete={(testCase) => void removeCase(testCase)}
+        onMove={(testCase, suiteId) => void moveCase(testCase, suiteId)}
         movingCaseId={movingCaseId}
-      />
+      />}
 
+      {previewId !== null && <RepositoryCasePreview id={previewId} onClose={() => setPreviewId(null)} />}
       {showSuiteForm && (
         <SuiteModal
           form={suiteForm}
@@ -523,7 +524,7 @@ function SuiteModal({
   onSubmit,
 }: {
   form: SuiteForm;
-  groups: SuiteGroup[];
+  groups: RepositoryGroup[];
   editing: boolean;
   continuingToCase: boolean;
   saving: boolean;
@@ -532,6 +533,7 @@ function SuiteModal({
   onClose: () => void;
   onSubmit: (event: FormEvent) => void;
 }) {
+  const [groupQuery, setGroupQuery] = useState("");
   return (
     <AccessibleDialog
       title={editing ? "Upravit test suitu" : continuingToCase ? "Nejprve vytvořte test suitu" : "Nová test suite"}
@@ -563,24 +565,11 @@ function SuiteModal({
         </label>
         <fieldset className="rounded-md border border-slate-200 p-3">
           <legend className="px-1 text-sm font-medium">Skupiny</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {groups.map((group) => (
-              <label className="flex items-center gap-2 text-sm" key={group.id}>
-                <input
-                  checked={form.groupIds.includes(group.id)}
-                  type="checkbox"
-                  onChange={(event) => onChange({
-                    ...form,
-                    groupIds: event.target.checked
-                      ? [...form.groupIds, group.id]
-                      : form.groupIds.filter((id) => id !== group.id),
-                  })}
-                />
-                #{group.id} {group.name}
-              </label>
-            ))}
-            {groups.length === 0 && <span className="text-sm text-slate-500">Zatím bez skupin.</span>}
-          </div>
+          <input type="search" aria-label="Hledat skupiny pro suitu" className="workspace-input mb-2 w-full" value={groupQuery} onChange={event => setGroupQuery(event.target.value)} />
+          <p className="mb-2 text-xs text-slate-500">Vybráno {form.groupIds.length} skupin</p>
+          <div className="h-56"><VirtualList items={groups.filter(group => normalizeSearch(`${group.id} ${group.name}`).includes(normalizeSearch(groupQuery)))} itemKey={group => group.id} label="Skupiny suity" render={group =>
+            <label className="flex h-9 items-center gap-2 text-sm"><input data-focus-target type="checkbox" checked={form.groupIds.includes(group.id)} onChange={event => onChange({ ...form, groupIds: event.target.checked ? [...form.groupIds, group.id] : form.groupIds.filter(id => id !== group.id) })} /><span className="truncate">#{group.id} {group.name}</span></label>
+          } /></div>
         </fieldset>
         <label className="flex items-center justify-between rounded-md bg-slate-50 p-3 text-sm">
           <span className="font-medium">Aktivní</span>

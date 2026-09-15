@@ -1,6 +1,6 @@
 # Jedno globální repository bez projektů
 
-Aktualizováno: 2026-08-24
+Aktualizováno: 2026-09-15
 
 ## Rozhodnutí
 
@@ -10,9 +10,9 @@ Testovací běhy se spravují samostatně přes Test Runs.
 
 ## Dopad na aplikaci
 
-- Test suites, test cases, requirements, dashboard a repository search jsou globální.
+- Test suites, test cases, dashboard a repository search jsou globální.
 - Test runs vybírají test cases přímo ze společného repository.
-- Kódy test cases a requirements jsou globálně unikátní.
+- Kódy test cases jsou globálně unikátní.
 - Uživatelské preference pohledu a oblíbených suit se ukládají jednou pro celé repository.
 - UI neobsahuje projektovou navigaci, formulář ani kontext.
 
@@ -23,8 +23,6 @@ Kolekce používají přímé endpointy:
 - `GET|POST /api/test-suites`
 - `GET|POST /api/test-cases`
 - `GET|POST /api/test-runs`
-- `GET|POST /api/requirements`
-- `GET /api/traceability`
 - `GET /api/dashboard`
 - `GET /api/repository/search`
 
@@ -34,7 +32,7 @@ Endpoint `/api/projects` ani cesty `/api/projects/{project_id}/...` neexistují.
 
 Migrace `0014_remove_projects`:
 
-1. zachová všechny suity, test cases, test runs a requirements;
+1. při původním odstranění projektů zachovala všechny suity, test cases, test runs i tehdejší požadavky; modul požadavků později odstranila migrace 0024;
 2. upraví případné duplicitní requirement kódy z různých původních projektů;
 3. odstraní `project_id` z pracovních tabulek;
 4. odstraní tabulku `projects`.

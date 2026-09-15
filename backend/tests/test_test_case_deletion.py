@@ -48,7 +48,7 @@ def test_delete_used_test_case_archives_case_and_preserves_history(client: TestC
         json={
             "suite_id": 1,
             "code": "TC-DELETE-LINKED",
-            "title": "Case pouzity v runu a requirementu",
+            "title": "Case pouzity v runu",
             "status": "ready",
             "steps": [
                 {
@@ -62,18 +62,6 @@ def test_delete_used_test_case_archives_case_and_preserves_history(client: TestC
     )
     assert create_response.status_code == 200
     test_case_id = create_response.json()["id"]
-
-    requirement_response = client.post(
-        "/api/requirements",
-        headers=headers,
-        json={
-            "code": "REQ-DELETE-LINKED",
-            "title": "Requirement s mazanym test case",
-            "test_case_ids": [test_case_id],
-        },
-    )
-    assert requirement_response.status_code == 201
-    requirement_id = requirement_response.json()["id"]
 
     run_response = client.post(
         "/api/test-runs",
@@ -89,10 +77,6 @@ def test_delete_used_test_case_archives_case_and_preserves_history(client: TestC
     archived_case = client.get(f"/api/test-cases/{test_case_id}", headers=headers)
     assert archived_case.status_code == 200
     assert archived_case.json()["status"] == "deprecated"
-
-    requirement_after_delete = client.get(f"/api/requirements/{requirement_id}", headers=headers)
-    assert requirement_after_delete.status_code == 200
-    assert [item["id"] for item in requirement_after_delete.json()["test_cases"]] == [test_case_id]
 
     run_after_delete = client.get(f"/api/test-runs/{test_run_id}", headers=headers)
     assert run_after_delete.status_code == 200

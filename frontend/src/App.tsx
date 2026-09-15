@@ -2,9 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "./auth/AuthContext";
 import { AppLayout } from "./components/layout/AppLayout";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
-import { RequirementsPage } from "./pages/RequirementsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TestCaseDetailPage } from "./pages/TestCaseDetailPage";
@@ -43,13 +43,13 @@ export default function App() {
           <Route path="/test-cases/:testCaseId" element={<TestCaseDetailPage />} />
           <Route path="/test-case-approvals" element={<TestCaseApprovalsPage />} />
           <Route path="/test-case-approvals/:reviewId" element={<TestCaseApprovalDetailPage />} />
-          <Route path="/requirements" element={<RequirementsPage />} />
           <Route path="/test-runs" element={<TestRunsPage />} />
           <Route path="/test-runs/:testRunId/execution" element={<ExecutionPage />} />
           <Route path="/execution/:testRunId" element={<ExecutionPage />} />
           <Route path="/test-case-properties" element={<TestCasePropertiesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AppLayout>
   );

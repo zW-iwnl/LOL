@@ -1,74 +1,27 @@
-# UX / Workflow Audit
+# UX / workflow audit
 
-Tento checklist slouží jako "analytik stránky" pro pravidelnou kontrolu workflow, regresí a použitelnosti.
+Aktuální aplikace používá jedno globální Repository se skupinami DAG a plochými suitami.
 
-## Automatizovaný smoke audit
+## Kontrolované průchody
 
-Spuštění z `frontend` složky:
+1. Dashboard → Repository → nový test → návrh → odeslání.
+2. Schvalování → převzetí → připomínka → vrácení → oprava → schválení.
+3. Test Runs → výběr schválených scénářů → execution → výsledek → další test.
+4. Execution → změna scénáře → review → návrat na konkrétní pokus.
+5. Vyřazení testu zachovává jeho verze a historii provedení.
 
-```powershell
-npm run test:smoke
-```
+## Kontroly použitelnosti
 
-Výchozí login údaje:
+- Při návratu z detailu zůstávají filtry, stránka a výběr.
+- Rozpracované komentáře/návrhy se při chybě ani přepnutí neztratí.
+- Kompaktní fronta a rozhodnutí se vejdou na 1366×768; mobil nemá vodorovné přetečení.
+- Přiřazení a schválení odpovídají serverovým oprávněním a nezávislosti reviewera.
+- Souhrny zahrnují všechny běhy; seznamy fungují i za první stovkou položek.
+- Výsledky testování a schválení definice jsou jasně oddělené.
+- Prázdný seznam a chyba nabízí konkrétní další akci.
 
-- `TEST_MANAGER_EMAIL=admin@testmanager.cz`
-- `TEST_MANAGER_PASSWORD=admin123`
+## Ověření
 
-Pokud už frontend běží, Playwright použije existující server. Pokud běží stack na jiné URL:
-
-```powershell
-$env:PLAYWRIGHT_BASE_URL="http://localhost:5174"
-$env:PLAYWRIGHT_SKIP_WEBSERVER="1"
-npm run test:smoke
-```
-
-## Smoke scénáře
-
-- Login funguje a přesměruje na Dashboard.
-- Test Cases mají viditelný lokální projektový kontext a akci pro nový test case.
-- Test Runs mají lokální projektový kontext a create wizard.
-- Test Run wizard validuje povinný název.
-- Test Run wizard nepustí vytvoření bez vybraného test case.
-- Test během průchodu hlídá console/page errors.
-
-## Ruční workflow checklist
-
-Pro každou hlavní stránku ověř:
-
-- Je jasné, ve kterém projektu uživatel pracuje.
-- Primární akce je viditelná bez hledání.
-- Empty state říká, co má uživatel udělat dál.
-- Loading a error stavy nepůsobí jako rozbitá stránka.
-- Formulář validuje povinná pole před odesláním.
-- Nebezpečné akce mají potvrzení nebo jsou jasně označené.
-- Status změny jsou prezentované jako workflow akce, ne jen technický select.
-- Po uložení je vidět potvrzení a uživatel ví, kde skončil.
-- Tester workflow má rychlou cestu na další položku.
-- Detail entity ukazuje audit historii, pokud se daná entita audituje.
-
-## Report formát
-
-Používej závažnosti:
-
-- `blocker`: uživatel nemůže dokončit hlavní workflow.
-- `high`: workflow je možné dokončit, ale hrozí špatná data nebo záměna kontextu.
-- `medium`: zbytečné tření, nejasný stav nebo slabá validace.
-- `low`: vizuální nebo textový polish.
-
-Záznam:
-
-```text
-Severity:
-Stránka:
-Krok:
-Očekávání:
-Skutečnost:
-Doporučení:
-```
-
-## Aktuální priorita auditů
-
-1. Login -> Test Cases -> nový test case.
-2. Test Runs -> wizard -> výběr test cases -> přiřazení.
-5. Requirements -> traceability matrix po doplnění endpointu.
+`npm run build`, `npm run test:unit`, Playwright scénáře v `frontend/tests/smoke`, backend pytest.
+Pro PostgreSQL použijte izolovaný `approval_verify_*` databázový prostor a skript
+`backend/scripts/verify_workflow_workspace.py`; existující neprázdnou databázi odmítne.

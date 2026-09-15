@@ -44,6 +44,7 @@ async function mockApi(page: Page, rejectFirstCreate = false) {
       return;
     }
     if (path === "/api/test-runs") json = runs;
+    if (path === "/api/test-runs/page") json = { items: runs, total: runs.length, stats: { total: runs.length, active: runs.length, completed: 0, averagePassRate: 0 } };
     await route.fulfill({ json });
   });
   return requests;

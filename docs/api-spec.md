@@ -74,10 +74,16 @@ PUT  /api/test-run-case-attempts/{case_attempt_id}/steps/{test_step_id}/result
 ## Dashboard
 GET /api/dashboard
 
-## Requirements
-GET  /api/requirements
-POST /api/requirements
-GET  /api/traceability
+## Kompaktní pracovní seznamy
+GET /api/repository/groups
+GET /api/repository/cases?offset=0&limit=50
+GET /api/test-runs/page?offset=0&limit=50
+GET /api/test-case-reviews?status=pending&assigned_to_me=true
+GET /api/test-case-draft-summaries?mine=true
+
+Fronty podporují stránkování, hledání, autora/reviewera, suitu a aktuální skupinu.
+`mine` u review znamená mnou odeslané žádosti; `assigned_to_me` znamená přiřazené mně.
+Detail review vrací `capabilities` s oprávněními, důvody blokace a nezávislými reviewery.
 
 ## Repository Search
 GET /api/repository/search?q=login

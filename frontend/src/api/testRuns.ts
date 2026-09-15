@@ -45,6 +45,7 @@ export type TestRunCaseAttemptHistory = {
 };
 
 export type TestRunCase = {
+  code?: string; title?: string;
   id: number;
   test_run_id: number;
   test_case_id: number;
@@ -83,7 +84,7 @@ export type TestRun = TestRunBase & {
 
 export type TestRunCaseListItem = Pick<
   TestRunCase,
-  "id" | "test_run_id" | "test_case_id" | "assigned_to" | "result"
+  "id" | "test_run_id" | "test_case_id" | "assigned_to" | "result" | "code" | "title"
 >;
 
 export type TestRunListItem = TestRunBase & {
@@ -160,7 +161,11 @@ export type TestRunExecutionCase = TestRunCase & {
   test_case: TestCase;
 };
 
+export type ExecutionNavigationGroup = SelectionGroup & { direct_case_ids: number[] };
+export type ExecutionNavigation = { suites: SelectionSuite[]; groups: ExecutionNavigationGroup[] };
+
 export type TestRunExecution = Omit<TestRun, "test_run_cases"> & {
+  navigation: ExecutionNavigation;
   definition_counts: Record<string, number>;
   attempts: TestRunAttempt[];
   selected_attempt_id: number;
@@ -273,4 +278,8 @@ export function updateTestRunStepResult(
       body: JSON.stringify({ result }),
     },
   );
+}
+
+export function getTestRunPage(params: GetTestRunsParams = {}) {
+  return request<{ items: TestRunListItem[]; total: number; offset: number; limit: number; stats: { total: number; active: number; completed: number; averagePassRate: number } }>(`/test-runs/page${buildQuery(params)}`);
 }
